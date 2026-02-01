@@ -1,0 +1,89 @@
+DOCUMENTO DESCRITIVO – TABELA DE ZAGUEIROS (TCC)
+
+1. VISÃO GERAL
+Esta tabela tem como objetivo a análise exclusiva de ZAGUEIROS para fins de tomada de decisão no Cartola.
+Cada linha representa um confronto da rodada (MANDANTE x VISITANTE).
+A estrutura da tabela é espelhada, com os dados do mandante à esquerda, do visitante à direita e a coluna CASA x FORA central.
+-------------------------------------------------
+2. FONTE DE DADOS
+Base única: planilha em excel que será postada no site via upload antes da solicitação da geração da tabela com os dados.
+
+Colunas da tabela de zagueiros:
+- Pts (Pontos) - Será calculado por média e os dados serão extraídos diretamente da coluna específica da tabela que já fornece pontos por jogador. 
+- Básica (Média Básica)- Será calculado por média e os dados serão extraídos diretamente da coluna específica da tabela que já fornece a média básica por jogador. 
+
+- DE (Desarmes) Será registrado por soma e os dados serão extraídos diretamente da coluna específica da tabela que já fornece o número de desarmes por jogador. 
+
+- CHUTES 
+Será contabilizado por soma a partir dos scouts FD, FF e FT fornecidos na tabela.
+
+- SG 
+É um dado do time e não dos jogadores, portanto, em cada rodada será considerado se o time teve ou não teve SG e não é a soma dos SGs de cada jogador do time. SG = Clean Sheet, ou seja, se um time não faz gol ele cede SG ao adversário, se um time conquista SG quer dizer que ele não sofreu gol do adversário. Há uma coluna específica pra SG na Planilha. Se um zagueiro de um time tem SG, significa que o time conquistou SG, pois é um bônus dado a todos os defensores. 
+
+-------------------------------------------------------------
+COmo identificar os zagueiros na Planilha - A coluna Posreal define as posições. Zagueiros são a PosReal 3
+
+
+
+3. REGRAS GERAIS DE CÁLCULO
+- SG - soma 1 ou 0 de cada time por rodada.
+- DESARME e CHUTES trabalham sempre com SOMA total dos jogadores.
+- PONTOS e MÉDIA BÁSICA trabalham com MÉDIA geral dos jogadores.
+- Não há uso de médias implícitas fora de PONTOS e MÉDIA BÁSICA.
+
+4. CONCEITO DE SG (CLEAN SHEET)
+SG é um bônus do TIME, não um scout individual.
+Para cada jogo:
+- Time sofreu gol → SG = 0
+- Time não sofreu gol → SG = 1
+Não existe soma de SG por jogador em um mesmo jogo.
+
+5. DEFINIÇÃO DE CONQUISTADO E CEDIDO
+MANDANTE:
+- Conquistado: COC (conquistado em casa -  scouts conquistados pelo time mandante)
+- Cedido: CDC (cedido em casa - scouts cedidos pelo time mandante)
+
+VISITANTE:
+- Conquistado: COF (conquistado fora - scouts conquistados pelo time visitante)
+- Cedido: CDF (cedido fora - scouts cedidos pelo visitante)
+
+
+6. DEFINIÇÃO DOS SCOUTS
+SG:
+- Conquistado: soma de jogos sem sofrer gols.
+- Cedido: soma de jogos em que o adversário não sofreu gols.
+
+DESARME (DE):
+- Soma dos desarmes realizados pelos zagueiros do time.
+
+CHUTES:
+- Soma de FD + FF + FT dos zagueiros.
+
+PONTOS (Pts):
+- Média aritmética da coluna Pts da planilha.
+
+MÉDIA BÁSICA (Básica):
+- Média aritmética da coluna Básica da planilha.
+
+7. ESTRUTURA DA TABELA
+BLOCO DO MANDANTE (da esquerda para o centro):
+- SG (COC | CDF)
+- DESARME (COC | CDF)
+- CHUTES (COC | CDF)
+- PONTOS (COC | CDF)
+- MÉDIA BÁSICA (COC | CDF)
+
+COLUNA CENTRAL:
+- CASA x FORA (escudos do confronto)
+
+BLOCO DO VISITANTE (do centro para a direita):
+- MÉDIA BÁSICA (COF | CDC)
+- PONTOS (COF | CDC)
+- CHUTES (COF | CDC)
+- DESARME (COF | CDC)
+- SG (COF | CDC)
+
+8. FINALIDADE DO DOCUMENTO
+Este documento serve como referência conceitual e estrutural definitiva para:
+
+Nenhuma decisão visual ou estética é tomada aqui.

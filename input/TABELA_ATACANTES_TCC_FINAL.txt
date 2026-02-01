@@ -1,0 +1,87 @@
+
+TABELA DE ATACANTES – DESCRIÇÃO ESTRUTURAL (TCC)
+
+OBJETIVO DA TABELA
+A tabela de atacantes tem como objetivo analisar o desempenho ofensivo dos jogadores da posição ATA, com foco em produção ofensiva direta e indireta, regularidade de pontuação e comparação de desempenho conforme o mando de campo (casa x fora).
+
+A tabela NÃO trabalha com perfis visuais (ameaças/oportunidades) e NÃO utiliza scouts redundantes. A análise é centrada em participação ofensiva real e eficiência prática para o Fantasy Game Cartola.
+
+FONTE DE DADOS
+Base principal:
+- Planilha: Scouts_Reorganizado
+
+Os dados utilizados já estão disponíveis na base, com exceção do scout AF, que exige um processo específico descrito adiante.
+
+SCOUTS UTILIZADOS E MÉTODO DE CÁLCULO
+
+1. AF – ASSISTÊNCIA PARA FINALIZAÇÃO
+- Definição: passes que resultam diretamente em finalização de um companheiro.
+- Método: SOMA.
+- Particularidade: o valor de AF não está disponível por jogo.
+- Procedimento:
+  - A cada rodada, a planilha apresenta o valor acumulado de AF por jogador.
+  - O valor da rodada é obtido pela diferença entre o total atual e o total da rodada anterior.
+  - Exemplo:
+    Rodada 1: 4 AF acumuladas
+    Rodada 2: 6 AF acumuladas
+    AF da Rodada 2 = 2
+- Esse processo permite reconstruir o desempenho rodada a rodada.
+
+2. CHUTES
+- Definição: total de finalizações realizadas pelo atacante.
+- Composição: FD + FF + FT.
+- Método: SOMA.
+- Representa volume ofensivo e presença constante no ataque.
+
+3. PG – PARTICIPAÇÃO EM GOLS
+- Definição: gols + assistências.
+- Método: SOMA.
+- Observação importante:
+  - Não há coluna exclusiva de GOLS na tabela.
+  - Os gols já estão integralmente contemplados no scout PG, evitando redundância.
+
+4. MÉDIA BÁSICA
+- Definição: média de pontuação básica do jogador no Cartola.
+- Fonte: coluna “Básica” da planilha Scouts_Reorganizado.
+- Método: MÉDIA.
+- Representa regularidade, segurança de pontuação e envolvimento geral do atacante.
+
+ESTRUTURA DA TABELA
+
+A tabela é estruturada de forma espelhada para facilitar a comparação entre desempenho como mandante e visitante.
+
+SEQUÊNCIA DAS COLUNAS:
+
+LADO ESQUERDO (MANDANTE)
+1. AF (soma)
+2. Chutes (soma)
+3. PG (soma)
+4. Média Básica (média)
+
+CENTRO
+5. MANDO
+- Indica se o time atua em CASA ou FORA no confronto analisado.
+
+LADO DIREITO (VISITANTE)
+6. Média Básica (média)
+7. PG (soma)
+8. Chutes (soma)
+9. AF (soma)
+
+CRITÉRIOS IMPORTANTES
+
+- A tabela considera apenas jogadores da posição ATA.
+- Não há uso de xG, xGA ou métricas externas.
+- Não há uso de Chutes para Marcar um Gol (CHUT.PM).
+- Não há diferenciação visual por perfis.
+- Todos os scouts, exceto Média Básica, trabalham com SOMA.
+- Média Básica é o único scout trabalhado por MÉDIA.
+
+FINALIDADE PRÁTICA
+A tabela de atacantes serve como base analítica para:
+- Identificação de atacantes mais participativos ofensivamente.
+- Comparação de desempenho casa x fora.
+- Análise de atacantes construtores (AF) versus finalizadores (Chutes).
+- Apoio à tomada de decisão estratégica no Cartola.
+
+Este documento define a estrutura oficial da Tabela de Atacantes do projeto TCC.

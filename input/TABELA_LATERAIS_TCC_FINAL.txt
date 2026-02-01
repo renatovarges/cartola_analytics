@@ -1,0 +1,203 @@
+TABELA – LATERAIS (LE + LD) — DOCUMENTO DESCRITIVO FINAL (TCC)
+Versão: FINAL • Objetivo: especificação 100% operacional (sem ambiguidades) para geração automática da tabela
+
+======================================================================
+1) FINALIDADE DA TABELA
+======================================================================
+Esta tabela analisa LATERAIS do campeonato separando em:
+- LATERAL ESQUERDO (LE)
+- LATERAL DIREITO (LD)
+
+A mesma tabela exibe:
+- À ESQUERDA: desempenho do time quando é MANDANTE (CASA) → métricas COC/CDF
+- AO CENTRO: bloco “CASA × FORA” (mando do confronto) + indicador de SG do time analisado, que não precisa ser duplicado em cada lado da tabela pois é um scout comum a LD e LE.
+- À DIREITA: desempenho do time quando é VISITANTE (FORA) → métricas COF/CDC
+
+A tabela é montada por CONFRONTO (um jogo por linha), no formato:
+MANDANTE × VISITANTE
+com a lógica “CASA × FORA” determinando qual lado representa qual time no confronto.
+
+======================================================================
+2) FONTE DE DADOS
+======================================================================
+Planilha-base: Será colocada uma versão atualizada no site via upload a cada rodada.
+
+Campos da Planilha a serem utilizados nesta elaboração da tabela:
+
+- Posreal  (subdivisão de lateral)
+- DE       (Desarmes)  [SCOUT]
+- Básica   (Média Básica) [COLUNA PRONTA NA BASE]
+- G        (Gols) [ou equivalente na base]
+- A        (Assistências) [ou equivalente na base]
+- SG do TIME (Clean Sheet por jogo) — derivado do placar do jogo
+
+IMPORTANTE — Posreal (subdivisão):
+- Lateral ESQUERDO (LE): Posreal = 2,6
+- Lateral DIREITO  (LD): Posreal = 2,2
+
+======================================================================
+3) DEFINIÇÕES DOS SCOUTS / MÉTRICAS
+======================================================================
+
+3.1) DE — DESARMES
+- Definição: total de desarmes.
+- Regra de cálculo: SOMA (nunca média).
+- Como somar: somar todos os desarmes dos jogadores da subposição (LE ou LD) do time, nos jogos filtrados.
+
+3.2) PG — PARTICIPAÇÕES EM GOLS
+- Definição: PG = GOL + ASSISTÊNCIA.
+- Regra de cálculo: SOMA (nunca média).
+- Como somar: somar (gols + assistências) de todos os jogadores da subposição (LE ou LD) do time, nos jogos filtrados.
+
+3.3) MÉDIA BÁSICA (coluna “Básica” na planilha)
+- Definição: é uma coluna já existente na planilha base, na aba "Por Jogo", chamada “Básica”.
+- Regra de cálculo NESTA TABELA: MÉDIA (uma das poucas exceções do projeto).
+- Como calcular a média:
+  - calcular a “Básica” dos jogadores da subposição (LE ou LD) do time em cada jogo (conforme a base),
+  - depois tirar a MÉDIA no conjunto de jogos filtrados.
+Observação prática:
+- Se a base já traz “Básica” por atleta/por jogo, a agregação final é a média desses registros filtrados (LE ou LD).
+
+3.4) SG — CLEAN SHEET (JOGO SEM SOFRER GOLS)
+- Conceito essencial: SG é bônus do TIME, não é scout individual.
+- Regra por jogo:
+  - Se o time sofreu pelo menos 1 gol no jogo → SG = 0
+  - Se o time NÃO sofreu gol no jogo → SG = 1
+- Regra de cálculo na tabela (conjunto de jogos filtrados): SOMA dos jogos com SG=1 (ou seja, “quantos jogos sem sofrer gol”).
+NÃO existe “somar SG de jogadores”. SG é sempre 0/1 por jogo por time.
+
+======================================================================
+4) CONCEITOS “CONQUISTADOS” x “CEDIDOS”
+======================================================================
+A tabela sempre trabalha com 2 perspectivas para cada métrica:
+- CONQUISTADOS: o que o time analisado PRODUZ naquele recorte
+- CEDIDOS: o que o time analisado CEDE ao adversário naquele recorte
+
+O mapeamento de labels usados no projeto é:
+- CASA:
+  - COC = CONQUISTADOS EM CASA
+  - CDC = CEDIDOS EM CASA
+- FORA:
+  - COF = CONQUISTADOS FORA
+  - CDF = CEDIDOS FORA
+
+======================================================================
+5) ESTRUTURA VISUAL / ORDEM DAS COLUNAS (CABEÇALHO)
+======================================================================
+A tabela de LATERAIS possui blocos simétricos, com centro “CASA × FORA”.
+ORDEM (da esquerda para a direita), conforme o layout que você definiu:
+
+A) BLOCO CASA (COC/CDF) — LADO ESQUERDO DA TABELA
+---------------------------------------------------
+1) LATERAL ESQUERDO — CASA
+   - DESARME: COC | CDF
+   - PG:      COC | CDF
+   - MÉDIA BÁSICA: COC | CDF
+
+2) LATERAL DIREITO — CASA
+   - DESARME: COC | CDF
+   - PG:      COC | CDF
+   - MÉDIA BÁSICA: COC | CDF
+
+3) SG — CASA
+   - SG: COC | CDF
+   (interpretação: jogos do time em casa sem sofrer gol, e o recorte “cedido” segue a lógica de confronto,
+    ver Seção 6.4 para regra operacional)
+
+B) CENTRO — “CASA × FORA”
+-------------------------
+4) CASA × FORA
+   - coluna central que exibe o confronto (MANDANTE × VISITANTE)
+   - esta coluna não é soma/média; é apenas informativa (mando do jogo)
+
+C) BLOCO FORA (COF/CDC) — LADO DIREITO DA TABELA
+------------------------------------------------
+5) SG — FORA
+   - SG: COF | CDC
+
+6) LATERAL DIREITO — FORA
+   - MÉDIA BÁSICA: COF | CDC
+   - PG:           COF | CDC
+   - DESARME:      COF | CDC
+
+7) LATERAL ESQUERDO — FORA
+   - MÉDIA BÁSICA: COF | CDC
+   - PG:           COF | CDC
+   - DESARME:      COF | CDC
+
+Observação importante (ordem proposital):
+- À esquerda, LE/LD começam por DESARME → PG → MÉDIA.
+- À direita, LD/LE começam por MÉDIA → PG → DESARME.
+Isso é um ESPELHO visual (como você desenhou), não um erro.
+
+======================================================================
+6) REGRAS DE CÁLCULO (PASSO A PASSO, SEM “MÉDIA” ONDE NÃO DEVE)
+======================================================================
+
+6.1) Entradas (parâmetros) que a tabela deve aceitar
+- N = número de jogos a considerar (ex.: últimos 4, 5, 6…)
+- cASO HAJA FILTRO DE mando:
+  - Para o bloco CASA (COC/CDF): usar jogos do time quando ele foi mandante
+  - Para o bloco FORA (COF/CDC): usar jogos do time quando ele foi visitante
+
+- SE O FILTRO DE MANDO FOR "TODOS" O SISTEMA PEGA OS ÚLTIMOS JOGOS EM SEQUENCIA DE CADA TIME INDEPENDENTE DE MANDO DE CAMPO.
+
+- Rodada-alvo / lista de confrontos:
+  - obtida PELO ARQUIVO COM O REGISTRO DE TODAS AS RODADAS DO CAMPEONATO. SERVE PARA O SISTEMA TER A REFERÊNCIA DE QUEM JOGA COMO MANDANTE E QUEM JOGA COMO VISITANTE NA RODADA ALVO.
+
+6.2) Como calcular LATERAL ESQUERDO (LE) e LATERAL DIREITO (LD)
+Para cada jogo filtrado do time T:
+- Filtrar atletas do time T onde Posreal = 2,6 (LE) e Posreal = 2,2 (LD)
+- Agregar por jogo:
+  - DESARME: soma(DE)
+  - PG: soma(G + A)
+  - MÉDIA BÁSICA: média(Básica)  ← aqui é média de fato
+
+Depois agregar no conjunto dos N jogos:
+- DESARME e PG: soma dos valores por jogo (ou soma direta de todos os registros filtrados)
+- MÉDIA BÁSICA: média final dos registros (ou média das médias por jogo, desde que consistente)
+
+6.3) Como calcular “CEDIDOS” (CDF/CDC)
+O “cedido” representa o que o time T permite ao adversário.
+Regra operacional clara:
+- Para cada jogo do time T, considere o ADVERSÁRIO A daquele jogo.
+- Para obter CEDIDOS do time T naquele jogo, você mede a PRODUÇÃO do adversário A nas mesmas métricas,
+  respeitando a mesma subposição (LE/LD) do adversário.
+
+Exemplo (casa):
+- T está em casa contra A.
+- CDC (cedidos em casa) de T para “LE – DESARME” = soma dos desarmes dos LEs de A naquele jogo.
+- Idem para PG e Básica (Básica por média).
+
+Isso garante que “cedido” seja mensurável, consistente e simétrico com “conquistado”.
+
+6.4) SG em “Conquistado” e “Cedido” (regra sem confusão)
+SG é 0/1 por jogo por time por rodada.
+Para o time T, no jogo:
+- SG_conquistado(T) = 1 se T não sofreu gol, senão 0.
+- SG_cedido(T) = 1 se o ADVERSÁRIO não sofreu gol, senão 0.
+Ou seja:
+- “ceder SG” significa “permitir que o adversário saia sem sofrer gol”.
+Isso mantém a lógica conquistado/cedido sem inventar scout individual.
+
+======================================================================
+7) SAÍDA ESPERADA (O QUE A TABELA ENTREGA)
+======================================================================
+Para cada confronto da rodada:
+- Métricas CASA do mandante (COC/CDF) nos blocos LE/LD + SG
+- Métricas FORA do visitante (COF/CDC) nos blocos SG + LD/LE
+- Coluna central “CASA × FORA” exibindo escudos/identificação do confronto
+
+======================================================================
+8) REGRAS DE OURO (PARA NÃO QUEBRAR O CONCEITO)
+======================================================================
+1) SOMA em tudo, exceto:
+   - MÉDIA BÁSICA = MÉDIA
+2) SG é do TIME e é sempre 0/1 por jogo.
+3) LE e LD são definidos por Posreal (2,6 e 2,2).
+4) “Cedido” sempre mede o adversário (produção do adversário) no mesmo jogo.
+5) A ordem visual das colunas é parte do projeto (espelho), não deve ser “corrigida”.
+
+======================================================================
+FIM DO DOCUMENTO
+======================================================================

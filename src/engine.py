@@ -308,3 +308,148 @@ class CartolaEngine:
             slice_stats = game_stats
             
         return slice_stats
+    
+    # --- ZAGUEIROS ENGINE ---
+    def get_zagueiros_stats_raw(self, date_cutoff=None):
+        """gathers raw stats for Zagueiros (Pos 3)"""
+        # 1. Filtro Zagueiros (Pos 3)
+        # Loader já renomeia "PosReal" para "POSICAO".
+        # Usar config.POS_IDS["ZAGUEIRO"] para garantir compatibilidade com "3" e "3.0"
+        
+        target_ids = config.POS_IDS["ZAGUEIRO"] # ["3", "3.0"]
+        mask = self.df_pj["POSICAO"].astype(str).isin(target_ids)
+        df = self.df_pj[mask].copy()
+        
+        print(f"DEBUG: get_zagueiros_stats_raw - Total Rows: {len(self.df_pj)} | Zagueiros Found: {len(df)}")
+        if len(df) == 0:
+             print(f"DEBUG: No Zagueiros found! Unique POSICAO values: {self.df_pj['POSICAO'].unique()}")
+        
+        
+        # 2. Filtro de Data
+        if date_cutoff:
+             df = df[df["DATA"] < pd.to_datetime(date_cutoff)]
+             
+        
+        # 3. Métricas
+        # DE (Desarmes) - Mapeando DS (Desarme) para variavel DE interna
+        if "DS" in df.columns:
+            df["DE"] = df["DS"]
+        elif "DE" not in df.columns: 
+            df["DE"] = 0
+            
+        # SG (Saldo de gols) - Bônus.
+        if "SG" not in df.columns: df["SG"] = 0
+        
+        # CHUTES
+        for col in ["FF", "FD", "FT"]:
+             if col not in df.columns: df[col] = 0
+        df["CHUTES"] = df["FF"] + df["FD"] + df["FT"]
+        
+        # PONTOS (Pts)
+        if "PONTOS" not in df.columns: df["PONTOS"] = 0
+        
+        # BASICA
+        if "BASICA" not in df.columns: df["BASICA"] = df["PONTOS"] # Fallback
+        
+        return df
+
+    def get_zagueiros_aggregated(self, df_raw, window_n, time_filter=None, mando_filter=None):
+        df = df_raw.copy()
+        
+        if time_filter: df = df[df["TIME"] == time_filter]
+        
+        if mando_filter == "CASA": df = df[df["MANDO"] == "CASA"]
+        elif mando_filter == "FORA": df = df[df["MANDO"] == "FORA"]
+        
+        df = df.sort_values("DATA", ascending=True)
+        
+        # Agrupa POR JOGO
+        # SG é do TIME. Se qualquer um tem SG, o time tem SG nesse jogo (vale 1).
+        # DE, CHUTES: Soma de todos.
+        # PTS, BASICA: Média dos jogadores.
+        
+        game_stats = df.groupby(["MATCH_ID", "ADVERSARIO", "MANDO"]).agg({
+            "SG": "max",     # 1 se o time teve SG, 0 se não (basta pegar o max dos zagueiros)
+            "DE": "sum",     # Soma da zaga
+            "CHUTES": "sum", # Soma da zaga
+            "PONTOS": "mean",# Média por jogador
+            "BASICA": "mean",# Média por jogador
+            "DATA": "first"
+        }).sort_values("DATA").reset_index()
+        
+        # Janela
+        if hasattr(game_stats, "tail"):
+            slice_stats = game_stats.tail(window_n) if window_n > 0 else game_stats
+        else:
+            slice_stats = game_stats
+            
+        if len(slice_stats) == 0:
+            return {k: 0 for k in ["SG", "DE", "CHUTES", "PONTOS", "BASICA"]}
+            
+        return {
+            "SG": int(slice_stats["SG"].sum()),      # Soma de jogos com SG
+            "DE": slice_stats["DE"].sum(),           # Soma
+            "CHUTES": slice_stats["CHUTES"].sum(),   # Soma
+            "PONTOS": slice_stats["PONTOS"].mean(),  # Média das médias
+            "BASICA": slice_stats["BASICA"].mean()   # Média das médias
+        }
+
+    def generate_zagueiros_table(self, mandante, visitante, window_n=5, date_cutoff=None, mando_mode="POR_MANDO", rodada_curr=None):
+        # Normalização de nomes
+        def normalize_team_name(team):
+             if team in config.TEAM_ALIASES: return config.TEAM_ALIASES[team]
+             return team
+        mandante = normalize_team_name(mandante)
+        visitante = normalize_team_name(visitante)
+        
+        # Auto-cutoff (igual Meias)
+        if rodada_curr is not None:
+             # Tenta achar data desse jogo
+             try:
+                mask = (
+                    (self.df_pj["TIME"] == mandante) & 
+                    (self.df_pj["ADVERSARIO"] == visitante) &
+                    (self.df_pj["RODADA"].astype(str).str.replace(".0", "") == str(int(rodada_curr)))
+                )
+                match_row = self.df_pj[mask]
+                if not match_row.empty:
+                    date_cutoff = match_row.iloc[0]["DATA"]
+             except: pass
+
+        df_raw = self.get_zagueiros_stats_raw(date_cutoff)
+        
+        # Filtros
+        if mando_mode == "POR_MANDO":
+            f_coc, f_cdf_opp = "CASA", "CASA"
+            f_cof, f_cdc_opp = "FORA", "FORA"
+        else:
+            f_coc = f_cdf_opp = f_cof = f_cdc_opp = None
+            
+        # Lado Mandante
+        coc = self.get_zagueiros_aggregated(df_raw, window_n, time_filter=mandante, mando_filter=f_coc)
+        
+        # CDF (Cedido pelo Adversário do Visitante quando Adv jogou em Casa => Visitante jogou Fora)
+        # Visitante Adversaries
+        df_opp_vis = df_raw[df_raw["ADVERSARIO"] == visitante]
+        if f_cdf_opp: df_opp_vis = df_opp_vis[df_opp_vis["MANDO"] == f_cdf_opp]
+        cdf = self.get_zagueiros_aggregated(df_opp_vis, window_n)
+        
+        # Lado Visitante
+        cof = self.get_zagueiros_aggregated(df_raw, window_n, time_filter=visitante, mando_filter=f_cof)
+        
+        # CDC (Cedido pelo Adversário do Mandante)
+        df_opp_mand = df_raw[df_raw["ADVERSARIO"] == mandante]
+        if f_cdc_opp: df_opp_mand = df_opp_mand[df_opp_mand["MANDO"] == f_cdc_opp]
+        cdc = self.get_zagueiros_aggregated(df_opp_mand, window_n)
+        
+        return {
+            "MANDANTE": mandante, "VISITANTE": visitante,
+            # COC
+            "COC_SG": coc["SG"], "COC_DE": coc["DE"], "COC_CHUTES": coc["CHUTES"], "COC_PTS": coc["PONTOS"], "COC_BASICA": coc["BASICA"],
+            # CDF
+            "CDF_SG": cdf["SG"], "CDF_DE": cdf["DE"], "CDF_CHUTES": cdf["CHUTES"], "CDF_PTS": cdf["PONTOS"], "CDF_BASICA": cdf["BASICA"],
+            # COF
+            "COF_SG": cof["SG"], "COF_DE": cof["DE"], "COF_CHUTES": cof["CHUTES"], "COF_PTS": cof["PONTOS"], "COF_BASICA": cof["BASICA"],
+            # CDC
+            "CDC_SG": cdc["SG"], "CDC_DE": cdc["DE"], "CDC_CHUTES": cdc["CHUTES"], "CDC_PTS": cdc["PONTOS"], "CDC_BASICA": cdc["BASICA"]
+        }

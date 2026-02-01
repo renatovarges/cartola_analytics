@@ -20,13 +20,17 @@ from src.rounds import parse_rounds_file
 st.sidebar.header("Parâmetros da Análise")
 
 # 1. Carregar Arquivo de Rodadas
-ROUNDS_FILE = r"C:\Users\User\.gemini\antigravity\scratch\cartola_analytics\input\RODADAS_BRASILEIRAO_2026.txt"
+# 1. Carregar Arquivo de Rodadas
+# Caminho relativo para funcionar em qualquer PC
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROUNDS_FILE = os.path.join(BASE_DIR, "input", "RODADAS_BRASILEIRAO_2026.txt")
+
 rounds_data = {}
 if os.path.exists(ROUNDS_FILE):
     rounds_data = parse_rounds_file(ROUNDS_FILE)
     st.sidebar.success(f"Tabela carregada: {len(rounds_data)} rodadas.")
 else:
-    st.sidebar.error("Arquivo de rodadas não encontrado.")
+    st.sidebar.error(f"Arquivo de rodadas não encontrado em: {ROUNDS_FILE}")
 
 # 2. Seletor de Rodada Alvo
 rodadas_disponiveis = sorted(rounds_data.keys()) if rounds_data else [1]
@@ -36,15 +40,21 @@ rodada_alvo = st.sidebar.selectbox("Rodada Alvo", rodadas_disponiveis, index=0)
 window_n = st.sidebar.number_input("Recorte (N Jogos)", min_value=1, max_value=20, value=5)
 tipo_filtro = st.sidebar.radio("Tipo de Filtro", ["TODOS", "POR_MANDO"], index=0, help="TODOS: Últimos N jogos gerais. POR_MANDO: Últimos N jogos em casa (para mandante) ou fora (para visitante).")
 
-# Filtro de Clasificação (Meia vs Volante)
-mv_selection = st.sidebar.radio("Classificação", ["Todos", "Apenas Meias", "Apenas Volantes"], index=0)
-mv_filter_map = {"Todos": None, "Apenas Meias": "MEIA", "Apenas Volantes": "VOLANTE"}
-mv_filter_val = mv_filter_map[mv_selection]
+# SELETOR DE POSIÇÃO (MACRO)
+st.sidebar.markdown("---")
+macro_pos = st.sidebar.selectbox("Posição Principal", ["Meias", "Zagueiros"], index=0)
+
+# Sub-Filtros (apenas para Meias por enquanto)
+mv_filter_val = None
+if macro_pos == "Meias":
+    mv_selection = st.sidebar.radio("Classificação", ["Todos", "Apenas Meias", "Apenas Volantes"], index=1)
+    mv_filter_map = {"Todos": None, "Apenas Meias": "MEIA", "Apenas Volantes": "VOLANTE"}
+    mv_filter_val = mv_filter_map[mv_selection]
 
 data_corte = st.sidebar.date_input("Data de Corte", pd.to_datetime("2026-12-31")) # Atualizado padrao pra 2026
 
 # 4. Seleção de Arquivo Excel (Fonte de Dados)
-DEFAULT_PATH = r"C:\Users\User\.gemini\antigravity\scratch\cartola_analytics\input\Scouts_Reorganizado.xlsx"
+DEFAULT_PATH = os.path.join(BASE_DIR, "input", "Scouts_Reorganizado.xlsx")
 
 # Opção de upload
 st.sidebar.markdown("---")
@@ -109,8 +119,8 @@ except Exception as e:
     st.error(f"Erro ao carregar engine: {e}")
     st.stop()
 
-# --- ABA MEIAS ---
-st.header(f"Análise de Meias - Rodada {rodada_alvo}")
+# Título Principal
+st.title(f"Análise de {macro_pos} - Rodada {rodada_alvo}")
 
 # Determinar Confrontos da Lista
 confrontos = rounds_data.get(rodada_alvo, [])
@@ -121,45 +131,68 @@ else:
     st.info(f"Processando {len(confrontos)} jogos da Rodada {rodada_alvo}...")
 
 # Botão para (re)calcular
-if st.button("Gerar Tabela de Meias", type="primary"):
+if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
     results = []
     progress_bar = st.progress(0)
     
     for i, (mandante, visitante) in enumerate(confrontos):
         try:
-             row = engine.generate_confronto_table(
-                mandante, 
-                visitante, 
-                window_n, 
-                data_corte,
-                mando_mode=tipo_filtro,
-                rodada_curr=rodada_alvo, # REGRA DE OURO: Data automática
-                mv_filter=mv_filter_val
-            )
-             results.append(row)
+            if macro_pos == "Meias":
+                 row = engine.generate_confronto_table(
+                    mandante, 
+                    visitante, 
+                    window_n, 
+                    data_corte,
+                    mando_mode=tipo_filtro,
+                    rodada_curr=rodada_alvo,
+                    mv_filter=mv_filter_val
+                )
+            elif macro_pos == "Zagueiros":
+                row = engine.generate_zagueiros_table(
+                    mandante,
+                    visitante,
+                    window_n,
+                    data_corte,
+                    mando_mode=tipo_filtro,
+                    rodada_curr=rodada_alvo
+                )
+                
+            results.append(row)
         except Exception as e:
             st.warning(f"Erro em {mandante}x{visitante}: {e}")
+            import traceback
+            # print(traceback.format_exc()) # Debug
             
         progress_bar.progress((i + 1) / len(confrontos))
 
     if results:
-        # Salvar no session_state
-        st.session_state["meias_results"] = pd.DataFrame(results)
+        # Salvar no session_state com chave dinamica para nao misturar
+        st.session_state["results_key"] = macro_pos
+        st.session_state["results_df"] = pd.DataFrame(results)
     else:
         st.warning("Nenhum dado gerado.")
 
 # Lógica de Exibição (Baseado no Estado)
-if "meias_results" in st.session_state:
-    df_results = st.session_state["meias_results"]
+if "results_df" in st.session_state:
+    df_results = st.session_state["results_df"]
+    current_pos = st.session_state.get("results_key", "Meias")
     
-    # Colunas e Ordem (Layout Centralizado)
-    # Esquerda (Mandante em Casa + Visitante Fora que cedeu)
-    left_cols = ["COC_AF", "CDF_AF", "COC_CHUTES", "CDF_CHUTES", "COC_PG", "CDF_PG", "COC_BASICA", "CDF_BASICA"]
-    # Centro (Times)
-    center_cols = ["MANDANTE", "VISITANTE"]
-    # Direita (Visitante Fora + Mandante Casa que cedeu)
-    right_cols = ["COF_BASICA", "CDC_BASICA", "COF_PG", "CDC_PG", "COF_CHUTES", "CDC_CHUTES", "COF_AF", "CDC_AF"]
-    
+    # Definir Colunas de Exibição Baseado no Tipo
+    if current_pos == "Meias":
+        # Ordem Meias
+        left_cols = ["COC_AF", "CDF_AF", "COC_CHUTES", "CDF_CHUTES", "COC_PG", "CDF_PG", "COC_BASICA", "CDF_BASICA"]
+        center_cols = ["MANDANTE", "VISITANTE"]
+        right_cols = ["COF_BASICA", "CDC_BASICA", "COF_PG", "CDC_PG", "COF_CHUTES", "CDC_CHUTES", "COF_AF", "CDC_AF"]
+    elif current_pos == "Zagueiros":
+        # Ordem Zagueiros: SG, DE, CHUTES, PTS, BASICA
+        left_cols = ["COC_SG", "CDF_SG", "COC_DE", "CDF_DE", "COC_CHUTES", "CDF_CHUTES", "COC_PTS", "CDF_PTS", "COC_BASICA", "CDF_BASICA"]
+        center_cols = ["MANDANTE", "VISITANTE"]
+        right_cols = ["COF_BASICA", "CDC_BASICA", "COF_PTS", "CDC_PTS", "COF_CHUTES", "CDC_CHUTES", "COF_DE", "CDC_DE", "COF_SG", "CDC_SG"]
+    else:
+        left_cols = []
+        center_cols = ["MANDANTE", "VISITANTE"]
+        right_cols = []
+
     # Combinar e verificar quais existem no DF
     final_cols = []
     for c in left_cols + center_cols + right_cols:
@@ -175,7 +208,7 @@ if "meias_results" in st.session_state:
     # Botão Download CSV
     csv = df_results.to_csv(index=False).encode('utf-8-sig')
     col_dl1, col_dl2 = st.columns(2)
-    col_dl1.download_button("Baixar CSV", csv, "tabela_meias.csv", "text/csv")
+    col_dl1.download_button("Baixar CSV", csv, f"tabela_{current_pos}.csv", "text/csv")
     
     # Botão Gerar PNG
     import matplotlib.pyplot as plt
@@ -184,25 +217,33 @@ if "meias_results" in st.session_state:
     if col_dl2.button("📸 Gerar Tabela PNG"):
         with st.spinner("Desenhando tabela em alta resolução..."):
             try:
-                # Usa o dataframe ORIGINAL DO RESULTADO (results no session state tem colunas brutas)
-                # Precisamos passar o DF session_state["meias_results"] que ja tem os dados
-                df_to_render = st.session_state["meias_results"]
+                # Usa o dataframe ORIGINAL DO RESULTADO
+                df_to_render = st.session_state["results_df"]
                 
-                fig = renderer.render_meias_table(df_to_render, rodada_alvo, window_n, tipo_filtro)
+                # Selecionar Renderer Correto
+                if current_pos == "Meias":
+                    fig = renderer.render_meias_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
+                elif current_pos == "Zagueiros":
+                    fig = renderer.render_zagueiros_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
+                else:
+                    st.error("Renderer não implementado para esta posição.")
+                    fig = None
                 
-                # Salvar em buffer
-                from io import BytesIO
-                buf = BytesIO()
-                fig.savefig(buf, format="png", dpi=150, bbox_inches='tight', facecolor='white')
-                st.image(buf, caption="Tabela Gerada", width="stretch")
-                
-                # Download PNG
-                st.download_button(
-                    label="Baixar Imagem PNG",
-                    data=buf.getvalue(),
-                    file_name=f"tabela_meias_rodada_{rodada_alvo}.png",
-                    mime="image/png"
-                )
+                if fig:
+                    # Salvar em buffer
+                    from io import BytesIO
+                    buf = BytesIO()
+                    # Aumentando DPI para 400 para garantir qualidade máxima
+                    fig.savefig(buf, format="png", dpi=400, bbox_inches='tight', facecolor='white')
+                    st.image(buf, caption=f"Tabela {current_pos} Gerada", width="stretch")
+                    
+                    # Download PNG
+                    st.download_button(
+                        label="Baixar Imagem PNG (Alta Resolução)",
+                        data=buf.getvalue(),
+                        file_name=f"tabela_{current_pos}_rodada_{rodada_alvo}.png",
+                        mime="image/png"
+                    )
             except Exception as e:
                 st.error(f"Erro ao gerar imagem: {e}")
                 import traceback

@@ -1,0 +1,152 @@
+
+TABELA DE GOLEIROS — DOCUMENTO DESCRITIVO FINAL (TCC)
+
+1. OBJETIVO DA TABELA
+Esta tabela tem como objetivo analisar o desempenho de GOLEIROS no Cartola FC a partir
+de dados objetivos, organizados por confronto (CASA x FORA), considerando:
+- Scouts CONQUISTADOS pelo time do goleiro
+- Scouts CEDIDOS pelo time adversário
+- Influência do mando de campo
+- Comparação direta entre os dois lados do confronto
+
+A tabela é um instrumento de APOIO À ANÁLISE HUMANA.
+Ela NÃO toma decisões, apenas organiza a informação de forma clara, comparável e visual.
+
+--------------------------------------------------
+2. BASE DE DADOS
+Fonte única:
+Planilha: SCOUTS_REORGANIZADO
+
+Todos os dados já existem nesta planilha.
+O código Python apenas:
+- Filtra
+- Soma
+- Calcula médias quando aplicável
+- Organiza por confronto e mando
+
+--------------------------------------------------
+3. PRINCÍPIOS GERAIS (IMPORTANTÍSSIMO)
+
+3.1. Soma x Média
+- SOMA: regra padrão para quase todos os scouts
+- MÉDIA: usada APENAS em dois casos:
+  a) CHUTES PARA MARCAR UM GOL (CHUT.PM)
+  b) % DE DEFESAS (%DE)
+
+3.2. SG (Saldo de Gols / Clean Sheet)
+- SG NÃO é scout individual
+- SG é um bônus DO TIME
+- Em cada jogo:
+  • Se o time NÃO sofreu gol → SG = 1
+  • Se sofreu gol → SG = 0
+- Portanto:
+  - SG conquistado = soma de jogos sem sofrer gols
+  - SG cedido = soma de jogos em que o adversário não sofreu gols
+- NÃO existe soma de SG por jogador
+
+--------------------------------------------------
+4. ESTRUTURA GERAL DA TABELA
+
+A tabela é organizada SEM PERFIL DE JOGADOR.
+A análise é sempre por:
+- TIME
+- CONFRONTO
+- MANDO
+
+A leitura é SIMÉTRICA:
+MANDANTE (lado esquerdo) x VISITANTE (lado direito)
+
+--------------------------------------------------
+5. SCOUTS UTILIZADOS (GOLEIROS)
+
+5.1. CHUT.AG — Chutes a Gol
+Quantidade de finalizações no alvo.
+
+- CONQUISTADO (COC):
+  Soma dos chutes no alvo sofridos pelo time do goleiro.
+- CEDIDO (CDF):
+  Soma dos chutes no alvo que o time adversário permite.
+
+--------------------------------------------------
+5.2. CHUT.PM — Chutes para Marcar um Gol
+Relação entre finalizações e gols sofridos.
+É uma MÉDIA.
+
+- CONQUISTADO (COC):
+  Média de chutes necessários para o adversário marcar gol contra o time.
+- CEDIDO (CDF):
+  Média de chutes necessários para o time marcar gol contra o adversário.
+
+--------------------------------------------------
+5.3. GOLS
+Quantidade de gols sofridos.
+
+- CONQUISTADO (COC):
+  Soma de gols sofridos pelo time.
+- CEDIDO (CDF):
+  Soma de gols que o adversário costuma sofrer.
+
+--------------------------------------------------
+5.4. DE — Defesas
+Quantidade total de defesas realizadas.
+
+- CONQUISTADO (COC):
+  Soma de defesas do time.
+- CEDIDO (CDF):
+  Soma de defesas que o adversário costuma conceder ao goleiro.
+
+--------------------------------------------------
+5.5. SG — Clean Sheet
+Bônus por jogo sem sofrer gols.
+
+- CONQUISTADO (COC):
+  Soma de jogos em que o time NÃO sofreu gols.
+- CEDIDO (CDF):
+  Soma de jogos em que o adversário NÃO sofreu gols.
+
+--------------------------------------------------
+5.6. %DE — Percentual de Defesas
+Eficiência do goleiro.
+É uma MÉDIA.
+
+- CONQUISTADO (COC):
+  Média do percentual de defesas do time.
+- CEDIDO (CDF):
+  Média do percentual de defesas permitidas pelo adversário.
+
+--------------------------------------------------
+6. MANDO DE CAMPO — CASA x FORA
+
+Cada linha representa UM confronto.
+A coluna central da tabela contém:
+- Escudo do time mandante
+- Escudo do time visitante
+
+Todos os scouts são recalculados considerando:
+- Desempenho do time quando atua EM CASA
+- Desempenho do time quando atua FORA
+
+--------------------------------------------------
+7. CONQUISTADO x CEDIDO — DEFINIÇÃO FINAL
+
+- CONQUISTADO (COC):
+  O que o TIME do goleiro PRODUZ ou SOFRE quando joga naquele mando.
+
+- CEDIDO (CDF):
+  O que o ADVERSÁRIO COSTUMA PRODUZIR ou SOFRER contra goleiros.
+
+Essa simetria é o núcleo da análise.
+
+--------------------------------------------------
+8. FINALIDADE ANALÍTICA
+
+A tabela permite identificar:
+- Goleiros com alto volume de defesas possíveis
+- Confrontos com maior chance de SG
+- Jogos com tendência a muitos chutes ou poucos gols
+- Melhores relações risco x retorno
+
+A DECISÃO FINAL é sempre humana.
+
+--------------------------------------------------
+DOCUMENTO FINAL — PADRÃO TCC
