@@ -1,0 +1,114 @@
+TABELA DE MEIAS – TCC (DOCUMENTO DESCRITIVO OFICIAL)
+
+1. OBJETIVO DA TABELA
+Esta tabela tem como objetivo analisar exclusivamente MEIAS DE ARMAÇÃO (meias ofensivos), excluindo volantes, para fins de análise estatística no Cartola, considerando:
+- Cedidos x Conquistados
+- Mando de campo (Casa x Fora)
+- Janela de N jogos (ex.: 3, 5, 7)
+A tabela não trabalha com perfis visuais nem categorias explícitas de “ameaças” ou “oportunidades”; essa leitura é feita pelo analista a partir dos dados apresentados.
+
+2. FILTRAGEM DE JOGADORES (MEIAS X VOLANTES) - NÃO TEMOS ESSA DIVISÃO AINDA EM 2026. 
+A separação entre meias de armação e volantes NÃO é feita pela planilha Scouts_Reorganizado.
+Para isso, deve ser utilizada uma planilha auxiliar específica CHAMADA DIVISAO_MEIAS_VOLANTES_NORMALIZADA que classifica os jogadores entre:
+- Meias de armação
+- Volantes
+O código deve cruzar:
+- Nome do jogador
+- Clube
+com essa planilha auxiliar e filtrar APENAS os meias de armação para compor a tabela.
+
+3. FONTE DE DADOS
+Fonte principal:
+- Planilha: Scouts_Reorganizado
+Aba principal de dados por jogo E A ABA SCOUTS PARA IDENTIFICAR "AF" (PASSES PARA FINALIZAÇÃO).
+
+Colunas já existentes e utilizadas diretamente:
+- Pontos (Pts)
+- Média Básica (Básica)
+
+4. DEFINIÇÃO DOS SCOUTS UTILIZADOS
+Todos os scouts abaixo são analisados por MANDO (Casa/Fora) e por JANELA DE JOGOS (N).
+
+4.1 AF – Assistência para Finalização
+- Método: SOMA
+- Particularidade importante:
+  A planilha não traz AF por jogo, mas sim o total acumulado por jogador.
+  Portanto, o cálculo deve ser feito por DIFERENÇA rodada a rodada:
+  AF_da_rodada = AF_total_atual - AF_total_rodada_anterior
+- Após obter o valor por jogo, o código deve somar as AF dentro da janela de jogos definida. ESSE SCOUT FICA NA ABA "SCOUTS" DA PLANILHA Scouts_Reorganizado.
+
+4.2 CHUTES
+- Definição: FD + FF + FT
+- Método: SOMA
+- O valor representa o total de chutes realizados pelo jogador dentro da janela analisada.
+
+4.3 PG – Participações em Gols
+- Definição: Gol + Assistência
+- Método: SOMA
+- Considera todas as participações diretas em gols dentro da janela de jogos.
+
+4.4 MÉDIA BÁSICA
+- Fonte: coluna “Básica” da planilha Scouts_Reorganizado
+- Método: MÉDIA
+- A média deve ser calculada considerando apenas os jogos dentro da janela e respeitando o mando (Casa/Fora).
+
+5. ESTRUTURA DA TABELA
+A tabela é espelhada em relação ao mando de campo.
+
+5.1 Sequência das Colunas (da esquerda para a direita)
+
+
+
+
+LADO ESQUERDO – DESEMPENHO DO JOGADOR NO MANDO ANALISADO:
+
+1. AF – Soma (via diferença rodada a rodada)
+
+- COC (CONQUISTADO EM CASA) - ASSISTENCIAS PARA FINALIZAÇÃO CONQUISTADAS PELO MANDANTE NOS ÚLTIMOS N JOGOS
+- CDF (CEDIDO FORA) - ASSISTENCIAS PARA FINALIZAÇÃO CEDIDAS PELO TIME VISITANTE NOS ÚLTIMOS N JOGOS
+
+
+2. CHUTES – Soma
+
+- COC (CONQUISTADO EM CASA) - CHUTES CONQUISTADOS PELO MANDANTE NOS ÚLTIMOS N JOGOS
+- CDF (CEDIDO FORA) - CHUTES CEDIDOS PELO TIME VISITANTE NOS ÚLTIMOS N JOGOS
+
+3. PG – Soma (COC / CDF)
+- COC (CONQUISTADO EM CASA) - PARTICIPAÇÕES EM GOL CONQUISTADAS PELO MANDANTE NOS ÚLTIMOS N JOGOS
+- CDF (CEDIDO FORA) - PARTICIPAÇÕES EM GOLS CEDIDAS PELO TIME VISITANTE NOS ÚLTIMOS N JOGOS
+
+
+4. MÉDIA BÁSICA – Média (COC / CDF)
+- COC (CONQUISTADO EM CASA) - MÉDIA BÁSICA CONQUISTADAS PELOS MEIAS DO TIME MANDANTE NOS ÚLTIMOS N JOGOS
+- CDF (CEDIDO FORA) - MÉDIA BÁSICA CEDIDA PELO TIME VISTANTE AOS MEIAS NOS ÚLTIMOS N JOGOS
+
+
+
+COLUNA CENTRAL:
+5. MANDO – Identificação visual de Casa x Fora (ex.: escudos dos times)
+
+
+
+LADO DIREITO – DESEMPENHO DO JOGADOR NO MANDO OPOSTO:
+
+
+6. MÉDIA BÁSICA – Média (COF / CDC)
+COF (CONQUISTADO FORA) MÉDIA BÁSICA CONQUISTADA FORA PELOS MEIAS DO TIME VISITANTE NOS ÚLTIMOS N JOGOS
+CDC (CEDIDO EM CASA)  MÉDIA BÁSICA CEDIDA PELO MANDANTE PARA MEIAS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS
+
+7. PG – Soma (COF / CDC)
+COF (CONQUISTADO FORA) PARTICIPAÇÕES EM GOL CONQUISTADAS FORA PELOS MEIAS DO TIME VISITANTE NOS ÚLTIMOS N JOGOS
+CDC (CEDIDO EM CASA) PARTICIPAÇÕES EM GOL CEDIDAS PELO MANDANTE PARA MEIAS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS
+
+
+8. CHUTES – Soma (COF / CDC)
+COF (CONQUISTADO FORA) CHUTES CONQUISTADOS FORA PELOS MEIAS DO TIME VISITANTE NOS ÚLTIMOS N JOGOS
+CDC (CEDIDO EM CASA) CHUTES CEDIDOS PELO MANDANTE PARA MEIAS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS
+
+
+9. AF – Soma (via diferença rodada a rodada) (COF / CDC) - ESSE SCOUT ESTÁ NUMA COLUNA DA ABA "Scouts" DA PLANILHA.
+
+COF (CONQUISTADO FORA) ASSISTENCIAS PARA FINALIZAÇÃO CONQUISTADAS FORA PELOS MEIAS DO TIME VISITANTE NOS ÚLTIMOS N JOGOS
+CDC (CEDIDO EM CASA) ASSISTENCIAS PARA FINALIZAÇÃO CEDIDAS PELO MANDANTE PARA MEIAS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS
+
+
