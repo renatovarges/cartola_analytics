@@ -39,6 +39,15 @@
 - [x] Ajustar opacidade/offset
 
 ### Qualidade e Resolução
-- [ ] Aumentar DPI (300→400+)
-- [ ] Otimizar anti-aliasing
-- [ ] Testar qualidade final
+- [x] Aumentar DPI (300→600)
+- [x] Otimizar anti-aliasing (Via alta resolução)
+- [x] Testar qualidade final
+
+## FASE 3: Expansão de Posições
+
+### Tabela de Zagueiros
+- [x] Configurar Loader (SG, DS)
+- [x] Engine: Calcular métricas defensivas (SG, DE, CHUTES, PTS)
+- [x] Renderer: Layout específico com Coloração Inteligente
+- [x] App: Integração no seletor lateral
+- [x] Teste final de geração

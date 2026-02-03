@@ -73,7 +73,7 @@ def load_excel_data(file_path):
             df_pj["MANDO"] = df_pj["MANDO"].apply(fix_mando)
             
         # Preencher numéricos vazios com 0
-        num_cols = ["G", "A", "FF", "FD", "FT", "BASICA", "PONTOS", "DS", "SG", "DE", "DP", "GS"]
+        num_cols = ["G", "A", "FF", "FD", "FT", "BASICA", "PONTOS", "DS", "SG", "DE", "DP", "GS", "POS_REAL"]
         for nc in num_cols:
             if nc in df_pj.columns:
                 df_pj[nc] = pd.to_numeric(df_pj[nc], errors="coerce").fillna(0)

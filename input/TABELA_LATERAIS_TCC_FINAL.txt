@@ -25,9 +25,9 @@ Planilha-base: Será colocada uma versão atualizada no site via upload a cada r
 Campos da Planilha a serem utilizados nesta elaboração da tabela:
 
 - Posreal  (subdivisão de lateral)
-- DE       (Desarmes)  [SCOUT]
+- DE       (Desarmes)  
 - Básica   (Média Básica) [COLUNA PRONTA NA BASE]
-- G        (Gols) [ou equivalente na base]
+- G        (Gols) 
 - A        (Assistências) [ou equivalente na base]
 - SG do TIME (Clean Sheet por jogo) — derivado do placar do jogo
 
@@ -90,17 +90,43 @@ ORDEM (da esquerda para a direita), conforme o layout que você definiu:
 A) BLOCO CASA (COC/CDF) — LADO ESQUERDO DA TABELA
 ---------------------------------------------------
 1) LATERAL ESQUERDO — CASA
-   - DESARME: COC | CDF
-   - PG:      COC | CDF
-   - MÉDIA BÁSICA: COC | CDF
+   - DESARME: 
+COC: SOMA DOS DESARMES CONQUISTADOS PELO (S) LATERAL (IS) ESQUERDO DO TIME MANDANTE NOS ÚLTIMOS N JOGOS
+CDF: SOMA DOS DESARMES CEDIDOS PELO TIME VISITANTE AOS LATERAL (IS) ESQUERDOS AOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS. 
+
+
+   - PG:      
+COC: SOMA DAS PARTICIPAÇÕES EM GOLS (GOL + ASSISTÊNCIAS) CONQUISTADOS PELO (S) LATERAL (IS) ESQUERDO DO TIME MANDANTE NOS ÚLTIMOS N JOGOS
+CDF: SOMA DAS PARTICIPAÇÕES EM GOLS (GOL + ASSISTÊNCIAS) CEDIDOS PELO TIME VISITANTE AOS LATERAL (IS) ESQUERDOS AOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS. 
+
+   - MÉDIA BÁSICA: 
+
+COC: SOMA DA MÉDIA BÁSICA CONQUISTADAS PELO (S) LATERAL (IS) ESQUERDO DO TIME MANDANTE NOS ÚLTIMOS N JOGOS
+CDF: SOMA DA MÉDIA BÁSICA CEDIDAS PELO TIME VISITANTE AOS LATERAL (IS) ESQUERDOS AOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS. 
 
 2) LATERAL DIREITO — CASA
-   - DESARME: COC | CDF
-   - PG:      COC | CDF
-   - MÉDIA BÁSICA: COC | CDF
+
+   - DESARME: 
+COC: SOMA DOS DESARMES CONQUISTADOS PELO (S) LATERAL (IS) DIREITOS DO TIME MANDANTE NOS ÚLTIMOS N JOGOS
+CDF: SOMA DOS DESARMES CEDIDOS PELO TIME VISITANTE AOS LATERAL (IS) DIREITOS AOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS. 
+
+
+   - PG:      
+COC: SOMA DAS PARTICIPAÇÕES EM GOLS (GOL + ASSISTÊNCIAS) CONQUISTADOS PELO (S) LATERAL (IS) DIREITOS DO TIME MANDANTE NOS ÚLTIMOS N JOGOS
+CDF: SOMA DAS PARTICIPAÇÕES EM GOLS (GOL + ASSISTÊNCIAS) CEDIDOS PELO TIME VISITANTE AOS LATERAL (IS) DIREITOS AOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS. 
+
+   - MÉDIA BÁSICA: 
+
+COC: SOMA DA MÉDIA BÁSICA CONQUISTADAS PELO (S) LATERAL (IS) DIREITOS DO TIME MANDANTE NOS ÚLTIMOS N JOGOS
+CDF: SOMA DA MÉDIA BÁSICA CEDIDAS PELO TIME VISITANTE AOS LATERAL (IS) DIREITOS AOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS. 
+
+
 
 3) SG — CASA
-   - SG: COC | CDF
+   - SG: 
+COC - JOGOS EM QUE O TIME MANDANTE NÃO SOFREU GOLS NOS ÚLTIMOS N JOGOS
+CDF - JOGOS EM QUEM O VISITANTE NÃO MARCOU GOLS NOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS
+
    (interpretação: jogos do time em casa sem sofrer gol, e o recorte “cedido” segue a lógica de confronto,
     ver Seção 6.4 para regra operacional)
 
@@ -113,17 +139,35 @@ B) CENTRO — “CASA × FORA”
 C) BLOCO FORA (COF/CDC) — LADO DIREITO DA TABELA
 ------------------------------------------------
 5) SG — FORA
-   - SG: COF | CDC
+COF - JOGOS EM QUE O TIME VISITANTE NÃO SOFREU GOLS NOS ÚLTIMOS N JOGOS
+CDC - JOGOS EM QUEM O MANDANTE NÃO MARCOU GOLS NOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS
 
 6) LATERAL DIREITO — FORA
-   - MÉDIA BÁSICA: COF | CDC
-   - PG:           COF | CDC
-   - DESARME:      COF | CDC
+
+   - MÉDIA BÁSICA: 
+COF: MÉDIA BASICA CONQUISTADA PELOS LATERAIS DIREITOS DO VISITANTE NOS ÚLTIMOS N JOGOS - NA TABELA É MOSTRADO COMO MÉDIA DOS N JOGOS.
+CDC: MÉDIA BÁSICA CEDIDA PELO MANDANTE  AOS LATERAIS DIREITOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS. NA TABELA É MOSTRADO COMO MÉDIA DOS N JOGOS.
+
+   - PG:
+COF: SOMA DAS PARTICIPAÇÕES EM GOLS (GOLS + ASSISTÊNCIAS) CONQUISTADAS PELOS LATERAIS DIREITOS DO VISITANTE NOS ÚLTIMOS N JOGOS
+CDC:SOMA DAS PARTICIPAÇÕES EM GOLS (GOLS + ASSISTÊNCIAS) CEDIDAS PELO MANDANTE AOS LATERAIS DIREITOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS.
+
+   - DESARME:
+COF: SOMA DOS DESARMES CONQUISTADOS PELOS LATERAIS DIREITOS DO VISITANTE NOS ÚLTIMOS N JOGOS
+CDC:SOMA DOS DESARMES CEDIDOS PELO MANDANTE AOS LATERAIS DIREITOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS.
 
 7) LATERAL ESQUERDO — FORA
-   - MÉDIA BÁSICA: COF | CDC
-   - PG:           COF | CDC
-   - DESARME:      COF | CDC
+   - MÉDIA BÁSICA: 
+COF: MÉDIA BASICA CONQUISTADA PELOS LATERAIS ESQUERDOS DO VISITANTE NOS ÚLTIMOS N JOGOS - NA TABELA É MOSTRADO COMO MÉDIA DOS N JOGOS.
+CDC: MÉDIA BÁSICA CEDIDA PELO MANDANTE AOS LATERAIS ESQUERDOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS. NA TABELA É MOSTRADO COMO MÉDIA DOS N JOGOS.
+
+   - PG:
+COF: SOMA DAS PARTICIPAÇÕES EM GOLS (GOLS + ASSISTÊNCIAS) CONQUISTADAS PELOS LATERAIS DIREITOS DO VISITANTE NOS ÚLTIMOS N JOGOS
+CDC:SOMA DAS PARTICIPAÇÕES EM GOLS (GOLS + ASSISTÊNCIAS) CEDIDAS PELO MANDANTE AOS LATERAIS ESQUERDOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS.
+
+   - DESARME:
+COF: SOMA DOS DESARMES CONQUISTADOS PELOS LATERAIS DIREITOS DO VISITANTE NOS ÚLTIMOS N JOGOS
+CDC:SOMA DOS DESARMES CEDIDOS PELO MANDANTE AOS AOS LATERAIS ESQUERDOS ADVERSÁRIOS NOS ÚLTIMOS N JOGOS.
 
 Observação importante (ordem proposital):
 - À esquerda, LE/LD começam por DESARME → PG → MÉDIA.
@@ -137,10 +181,10 @@ Isso é um ESPELHO visual (como você desenhou), não um erro.
 6.1) Entradas (parâmetros) que a tabela deve aceitar
 - N = número de jogos a considerar (ex.: últimos 4, 5, 6…)
 - cASO HAJA FILTRO DE mando:
-  - Para o bloco CASA (COC/CDF): usar jogos do time quando ele foi mandante
-  - Para o bloco FORA (COF/CDC): usar jogos do time quando ele foi visitante
+  - Para o bloco MANDANTE (COC/CDF): usar jogos do time quando ele foi mandante nos últimos N jogos!
+  - Para o bloco VISITANTE (COF/CDC): usar jogos do time quando ele foi visitante MOS ÚLTIMOS N JOGOS
 
-- SE O FILTRO DE MANDO FOR "TODOS" O SISTEMA PEGA OS ÚLTIMOS JOGOS EM SEQUENCIA DE CADA TIME INDEPENDENTE DE MANDO DE CAMPO.
+- SE O FILTRO DE MANDO FOR "TODOS" O SISTEMA IGNORA O MANDO DOS TIMES NAS RODADAS ANTERIORES E PEGA OS CEDIDOS E CONQUISTADOS DOS ÚLTIMOS JOGOS EM SEQUENCIA DE CADA TIME INDEPENDENTE DE MANDO DE CAMPO.
 
 - Rodada-alvo / lista de confrontos:
   - obtida PELO ARQUIVO COM O REGISTRO DE TODAS AS RODADAS DO CAMPEONATO. SERVE PARA O SISTEMA TER A REFERÊNCIA DE QUEM JOGA COMO MANDANTE E QUEM JOGA COMO VISITANTE NA RODADA ALVO.
@@ -158,16 +202,16 @@ Depois agregar no conjunto dos N jogos:
 - MÉDIA BÁSICA: média final dos registros (ou média das médias por jogo, desde que consistente)
 
 6.3) Como calcular “CEDIDOS” (CDF/CDC)
-O “cedido” representa o que o time T permite ao adversário.
-Regra operacional clara:
-- Para cada jogo do time T, considere o ADVERSÁRIO A daquele jogo.
-- Para obter CEDIDOS do time T naquele jogo, você mede a PRODUÇÃO do adversário A nas mesmas métricas,
-  respeitando a mesma subposição (LE/LD) do adversário.
+O “cedido” representa o que um time permitiu aos adversário conquistarem naquele scout específico, portanto, a regra do cedido é sempre olhar na planilha o que o adversário conquistou.
 
-Exemplo (casa):
-- T está em casa contra A.
-- CDC (cedidos em casa) de T para “LE – DESARME” = soma dos desarmes dos LEs de A naquele jogo.
-- Idem para PG e Básica (Básica por média).
+Regra operacional clara:
+- Para cada jogo de um time, considere o ADVERSÁRIO daquele jogo.
+- Para obter CEDIDOS do time do time mandante num jogo você busca os dados conquistados pelo adversário (visitante), respeitando a mesma subposição (LE/LD) do adversário. E vice versa! Para saber os cedidos do visitante num jogo, basta identificar os Scouts conquistados pelos jogadores daquela posição pelo mandante. 
+
+Exemplo:
+- Um time está jogando como mandante.
+- CDC (cedidos em casa) desse time para “LE – DESARME” = soma dos desarmes dos LEs do time visitante naquele jogo.
+- Idem para PG e Básica (Básica por média). E vice versa!
 
 Isso garante que “cedido” seja mensurável, consistente e simétrico com “conquistado”.
 
@@ -180,16 +224,9 @@ Ou seja:
 - “ceder SG” significa “permitir que o adversário saia sem sofrer gol”.
 Isso mantém a lógica conquistado/cedido sem inventar scout individual.
 
-======================================================================
-7) SAÍDA ESPERADA (O QUE A TABELA ENTREGA)
-======================================================================
-Para cada confronto da rodada:
-- Métricas CASA do mandante (COC/CDF) nos blocos LE/LD + SG
-- Métricas FORA do visitante (COF/CDC) nos blocos SG + LD/LE
-- Coluna central “CASA × FORA” exibindo escudos/identificação do confronto
 
 ======================================================================
-8) REGRAS DE OURO (PARA NÃO QUEBRAR O CONCEITO)
+7) REGRAS DE OURO (PARA NÃO QUEBRAR O CONCEITO)
 ======================================================================
 1) SOMA em tudo, exceto:
    - MÉDIA BÁSICA = MÉDIA

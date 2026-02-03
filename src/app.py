@@ -42,7 +42,7 @@ tipo_filtro = st.sidebar.radio("Tipo de Filtro", ["TODOS", "POR_MANDO"], index=0
 
 # SELETOR DE POSIÇÃO (MACRO)
 st.sidebar.markdown("---")
-macro_pos = st.sidebar.selectbox("Posição Principal", ["Meias", "Zagueiros"], index=0)
+macro_pos = st.sidebar.selectbox("Posição Principal", ["Meias", "Zagueiros", "Goleiros", "Laterais", "Atacantes"], index=0)
 
 # Sub-Filtros (apenas para Meias por enquanto)
 mv_filter_val = None
@@ -156,6 +156,32 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
                     mando_mode=tipo_filtro,
                     rodada_curr=rodada_alvo
                 )
+            elif macro_pos == "Goleiros":
+                row = engine.generate_goleiros_table(
+                    mandante,
+                    visitante,
+                    window_n,
+                    data_corte,
+                    mando_mode=tipo_filtro,
+                    rodada_curr=rodada_alvo
+                )
+            elif macro_pos == "Laterais":
+                row = engine.generate_laterais_table(
+                    mandante,
+                    visitante,
+                    window_n,
+                    mando_mode=tipo_filtro
+                )
+            elif macro_pos == "Atacantes":
+                 row = engine.generate_confronto_table(
+                    mandante, 
+                    visitante, 
+                    window_n, 
+                    data_corte,
+                    mando_mode=tipo_filtro,
+                    rodada_curr=rodada_alvo,
+                    mv_filter="ATACANTE"
+                )
                 
             results.append(row)
         except Exception as e:
@@ -178,7 +204,7 @@ if "results_df" in st.session_state:
     current_pos = st.session_state.get("results_key", "Meias")
     
     # Definir Colunas de Exibição Baseado no Tipo
-    if current_pos == "Meias":
+    if current_pos == "Meias" or current_pos == "Atacantes":
         # Ordem Meias
         left_cols = ["COC_AF", "CDF_AF", "COC_CHUTES", "CDF_CHUTES", "COC_PG", "CDF_PG", "COC_BASICA", "CDF_BASICA"]
         center_cols = ["MANDANTE", "VISITANTE"]
@@ -188,6 +214,27 @@ if "results_df" in st.session_state:
         left_cols = ["COC_SG", "CDF_SG", "COC_DE", "CDF_DE", "COC_CHUTES", "CDF_CHUTES", "COC_PTS", "CDF_PTS", "COC_BASICA", "CDF_BASICA"]
         center_cols = ["MANDANTE", "VISITANTE"]
         right_cols = ["COF_BASICA", "CDC_BASICA", "COF_PTS", "CDC_PTS", "COF_CHUTES", "CDC_CHUTES", "COF_DE", "CDC_DE", "COF_SG", "CDC_SG"]
+    elif current_pos == "Goleiros":
+        # Ordem Goleiros: AMEAÇAS (ChutAG, ChutPM, Gols) | OPORT (DE, SG, %DE)
+        left_cols = ["COC_CHUTES_AG", "CDF_CHUTES_AG", "COC_CHUTES_PM", "CDF_CHUTES_PM", "COC_GOLS", "CDF_GOLS", 
+                     "COF_DE", "CDC_DE", "COF_SG", "CDC_SG", "COF_PCT_DE", "CDC_PCT_DE"]
+        center_cols = ["MANDANTE", "VISITANTE"]
+        right_cols = ["COF_CHUTES_AG", "CDC_CHUTES_AG", "COF_CHUTES_PM", "CDC_CHUTES_PM", "COF_GOLS", "CDC_GOLS",
+                      "COC_DE", "CDF_DE", "COC_SG", "CDF_SG", "COC_PCT_DE", "CDF_PCT_DE"]
+
+    elif current_pos == "Laterais":
+        # Ordem Laterais (com prefixos corretos)
+        left_cols = [
+            "COC_LE_DE", "CDF_LE_DE", "COC_LE_PG", "CDF_LE_PG", "COC_LE_BAS", "CDF_LE_BAS",
+            "COC_LD_DE", "CDF_LD_DE", "COC_LD_PG", "CDF_LD_PG", "COC_LD_BAS", "CDF_LD_BAS",
+            "COC_SG", "CDF_SG"
+        ]
+        center_cols = ["MANDANTE", "VISITANTE"]
+        right_cols = [
+            "COF_SG", "CDC_SG",
+            "COF_LD_BAS", "CDC_LD_BAS", "COF_LD_PG", "CDC_LD_PG", "COF_LD_DE", "CDC_LD_DE",
+            "COF_LE_BAS", "CDC_LE_BAS", "COF_LE_PG", "CDC_LE_PG", "COF_LE_DE", "CDC_LE_DE"
+        ]
     else:
         left_cols = []
         center_cols = ["MANDANTE", "VISITANTE"]
@@ -225,6 +272,12 @@ if "results_df" in st.session_state:
                     fig = renderer.render_meias_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
                 elif current_pos == "Zagueiros":
                     fig = renderer.render_zagueiros_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
+                elif current_pos == "Goleiros":
+                    fig = renderer.render_goleiros_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
+                elif current_pos == "Laterais":
+                    fig = renderer.render_laterais_table(df_to_render, rodada_alvo, window_n, tipo_filtro)
+                elif current_pos == "Atacantes":
+                    fig = renderer.render_atacantes_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
                 else:
                     st.error("Renderer não implementado para esta posição.")
                     fig = None
@@ -234,7 +287,7 @@ if "results_df" in st.session_state:
                     from io import BytesIO
                     buf = BytesIO()
                     # Aumentando DPI para 400 para garantir qualidade máxima
-                    fig.savefig(buf, format="png", dpi=400, bbox_inches='tight', facecolor='white')
+                    fig.savefig(buf, format="png", dpi=600, bbox_inches='tight', facecolor='white')
                     st.image(buf, caption=f"Tabela {current_pos} Gerada", width="stretch")
                     
                     # Download PNG

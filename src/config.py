@@ -15,7 +15,8 @@ COLS_POR_JOGO = {
     "ADVERSARIO": ["ADVERSÁRIO", "ADVERSARIO", "OPONENTE", "Adversário"],
     "MANDO": ["MANDO", "LOCAL", "Mando", "Mand"],  # Esperado: CASA / FORA ou C / F ou Casa / Fora
     "DATA": ["DATA", "DATE", "DIA", "Data"],
-    "POSICAO": ["POSICAO", "POSIÇÃO", "POS", "POSREAL", "Posreal"],
+    "POSICAO": ["POSID", "PosID", "POSICAO", "POSIÇÃO", "POS"], # Genérica (1,2,3,4,5,6)
+    "POS_REAL": ["POSREAL", "PosReal", "Posreal"], # Específica (2.6, 2.2, etc)
     "RODADA": ["RODADA", "R"],
     
     # Scouts - Meias/Ofensivos

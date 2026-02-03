@@ -54,8 +54,13 @@ class CartolaEngine:
         Gera métricas, injetando AF do histórico persistente.
         """
         # 1. Filtro de Posição
-        meia_ids = config.POS_IDS["MEIA_ONLY"]
-        df = self.df_pj[self.df_pj["POSICAO"].astype(str).isin(meia_ids)].copy()
+        # 1. Filtro de Posição
+        if mv_filter == "ATACANTE":
+             target_ids = config.POS_IDS["ATACANTE"]
+        else:
+             target_ids = config.POS_IDS["MEIA_ONLY"]
+             
+        df = self.df_pj[self.df_pj["POSICAO"].astype(str).isin(target_ids)].copy()
         
         # 2. Carregar e Merge AF do Banco de Dados
         df_af_db = load_af_database()
@@ -452,4 +457,391 @@ class CartolaEngine:
             "COF_SG": cof["SG"], "COF_DE": cof["DE"], "COF_CHUTES": cof["CHUTES"], "COF_PTS": cof["PONTOS"], "COF_BASICA": cof["BASICA"],
             # CDC
             "CDC_SG": cdc["SG"], "CDC_DE": cdc["DE"], "CDC_CHUTES": cdc["CHUTES"], "CDC_PTS": cdc["PONTOS"], "CDC_BASICA": cdc["BASICA"]
+        }
+    def get_team_offensive_stats(self, team, window_n, mando_filter=None):
+        """
+        Calcula estatísticas OFENSIVAS do time (para coluna AMEAÇAS).
+        Retorna: Chutes Feitos, Gols Feitos, Defesas Forçadas (no goleiro adversário).
+        """
+        # Filtrar jogos do time
+        df = self.df_pj[self.df_pj["TIME"] == team].copy()
+        
+        if mando_filter:
+            df = df[df["MANDO"] == mando_filter]
+            
+        # Ordenar e pegar janela
+        match_dates = df.groupby("MATCH_ID")["DATA"].first().sort_values()
+        if window_n > 0:
+            match_dates = match_dates.tail(window_n)
+        
+        selected_matches = match_dates.index.tolist()
+        
+        if not selected_matches:
+             return {"CHUTES": 0, "GOLS": 0, "DE_FORCADA": 0}
+             
+        # 1. Chutes e Gols (Do próprio time) - Soma de todos jogadores
+        mask_team = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] == team)
+        df_team = self.df_pj[mask_team]
+        
+        # Chutes = FD + G (Desconsiderando FT por enquanto para ser conservador, ou incluir?)
+        # Texto diz "Finalizações no alvo". FD + G é o padrão.
+        chutes = df_team["FD"].sum() + df_team["G"].sum()
+        gols = df_team["G"].sum()
+        
+        # 2. Defesas Forçadas (Busca no Goleiro Adversário)
+        # Adversário é quem jogou NESSES matches mas NÃO é o time
+        mask_opp_gk = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] != team) & (self.df_pj["POSICAO"].isin(config.POS_IDS["GOLEIRO"]))
+        df_opp_gk = self.df_pj[mask_opp_gk]
+        
+        # DE (Defesa Dificil) ou DS? Config diz DE -> DEFESA_DIFICIL
+        # Vamos somar DE (que já foi carregada como DD no loader se mapeada)
+        # Se 'DE' não existir, tenta 'DD'
+        col_de = "DE" if "DE" in df_opp_gk.columns else "DD"
+        de_forcada = df_opp_gk[col_de].sum() if col_de in df_opp_gk.columns else 0
+        
+        # 3. Jogos Sem Marcar (SG do Adversário)
+        # Quantidade de jogos onde o time fez 0 gols
+        # Agrupar por match para ver gols do time em cada jogo
+        goals_per_match = df_team.groupby("MATCH_ID")["G"].sum()
+        jogos_sem_marcar = (goals_per_match == 0).sum()
+        
+        return {
+            "CHUTES": chutes,
+            "GOLS": gols,
+            "DE_FORCADA": de_forcada,
+            "JOGOS_SEM_MARCAR": jogos_sem_marcar
+        }
+
+    def get_team_defensive_stats(self, team, window_n, mando_filter=None):
+        """
+        Calcula estatísticas DEFENSIVAS do time (para coluna OPORTUNIDADES e AMEAÇAS sofridas).
+        Retorna: Chutes Sofridos, Gols Sofridos, Defesas Feitas (pelo meu GK), SG.
+        """
+        # Filtrar jogos do time
+        df = self.df_pj[self.df_pj["TIME"] == team].copy()
+        
+        if mando_filter:
+            df = df[df["MANDO"] == mando_filter]
+            
+        match_dates = df.groupby("MATCH_ID")["DATA"].first().sort_values()
+        if window_n > 0:
+            match_dates = match_dates.tail(window_n)
+            
+        selected_matches = match_dates.index.tolist()
+        
+        if not selected_matches:
+             return {"CHUTES_CEDIDOS": 0, "GS": 0, "DE": 0, "SG": 0}
+             
+        # 1. Stats do Goleiro/Defesa (Meu Time)
+        mask_team_gk = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] == team) & (self.df_pj["POSICAO"].isin(config.POS_IDS["GOLEIRO"]))
+        df_gk = self.df_pj[mask_team_gk]
+        
+        # DE (Defesas)
+        col_de = "DE" if "DE" in df_gk.columns else "DD"
+        de_feita = df_gk[col_de].sum() if col_de in df_gk.columns else 0
+        
+        # GS (Gols Sofridos) - As vezes GS está no goleiro, as vezes na zaga. Melhor pegar do Goleiro.
+        gs = df_gk["GS"].sum() if "GS" in df_gk.columns else 0
+        
+        # SG (Saldo Gol) - Bônus do time. Pegar max por partida do time.
+        mask_team = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] == team)
+        df_team_all = self.df_pj[mask_team]
+        # Agrupa por match e pega max de SG (se alguem teve SG, o time teve)
+        sg = df_team_all.groupby("MATCH_ID")["SG"].max().sum()
+        
+        # 2. Chutes Sofridos (Soma chutes do Adversário)
+        mask_opp = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] != team)
+        df_opp = self.df_pj[mask_opp]
+        
+        chutes_cedidos = df_opp["FD"].sum() + df_opp["G"].sum()
+        
+        return {
+            "CHUTES_CEDIDOS": chutes_cedidos,
+            "GS": gs,
+            "DE": de_feita,
+            "SG": sg
+        }
+
+    def generate_goleiros_table(self, mandante, visitante, window_n=5, date_cutoff=None, mando_mode="POR_MANDO", rodada_curr=None):
+        """
+        Gera linha da tabela de Goleiros (Cruzamento de Ameaças e Oportunidades).
+        Estrutura BLINDADA e isolada.
+        """
+        # Normalizar nomes
+        def normalize(t): return config.TEAM_ALIASES.get(t, t)
+        mandante = normalize(mandante)
+        visitante = normalize(visitante)
+
+        # Definir filtros de mando
+        # Padrão: Mandante usa stats CASAS, Visitante usa stats FORA
+        m_home = "CASA"
+        m_away = "FORA"
+        
+        # Se filtro for GERAL, ignora mando
+        if mando_mode == "TODOS":
+            m_home = None
+            m_away = None
+            
+        # === LADO ESQUERDO (MANDANTE CONTEXTO) ===
+        # AMEAÇAS (Mandante Attack vs Visitante Defense)
+        # COC: Mandante Attack
+        man_off = self.get_team_offensive_stats(mandante, window_n, m_home)
+        # CDF: Visitante Defense (Chutes Sofridos, Gols Sofridos)
+        vis_def = self.get_team_defensive_stats(visitante, window_n, m_away)
+        
+        # OPORTUNIDADES (Visitante GK vs Mandante Yielding)
+        # COF: Visitante GK Stats (DE, SG, %DE) -> Note: COF label usually means "Como Oponente Fora" (Visitante). Fits.
+        # CDC: Mandante Yielding (Defesas Forçadas pelo Mandante)
+        # CDC vem de `man_off["DE_FORCADA"]` (Defesas que o Mandante forçou)
+        
+        # === LADO DIREITO (VISITANTE CONTEXTO) ===
+        # AMEAÇAS (Visitante Attack vs Mandante Defense)
+        # COF: Visitante Attack
+        vis_off = self.get_team_offensive_stats(visitante, window_n, m_away)
+        # CDC: Mandante Defense
+        man_def = self.get_team_defensive_stats(mandante, window_n, m_home)
+        
+        # OPORTUNIDADES (Mandante GK vs Visitante Yielding)
+        # COC: Mandante GK Stats
+        # CDF: Visitante Yielding (Defesas Forçadas pelo Visitante)
+        
+        # === CÁLCULOS DERIVADOS ===
+        # CHUTES AG (Soma)
+        # CHUT. PM (Chutes / Gols) - Evitar div por zero
+        def calc_pm(chutes, gols):
+            return (chutes / gols) if gols > 0 else 0.0
+            
+        # % DE (EFICIÊNCIA: DE / (DE+GS))
+        def calc_pct(de, gs):
+            total = de + gs
+            return (de / total * 100.0) if total > 0 else 0.0
+            
+        return {
+            "MANDANTE": mandante,
+            "VISITANTE": visitante,
+            
+            # --- MANDANTE SIDE (Left Panel - Analisando Goleiro MANDANTE) ---
+            # AMEACAS: Chutes do Visitante (COF) e Sofridos pelo Mandante (CDC)
+            "COF_CHUTES_AG": vis_off["CHUTES"],      
+            "CDC_CHUTES_AG": man_def["CHUTES_CEDIDOS"], 
+            
+            "COF_CHUTES_PM": calc_pm(vis_off["CHUTES"], vis_off["GOLS"]),
+            "CDC_CHUTES_PM": calc_pm(man_def["CHUTES_CEDIDOS"], man_def["GS"]),
+            
+            "COF_GOLS": vis_off["GOLS"],
+            "CDC_GOLS": man_def["GS"],
+            
+            # OPORTUNIDADES: Defesas do Mandante (COC) e Forçadas pelo Visitante (CDF)
+            "COC_DE": man_def["DE"],        
+            "CDF_DE": vis_off["DE_FORCADA"],
+            
+            "COC_SG": man_def["SG"],       
+            "CDF_SG": vis_off["JOGOS_SEM_MARCAR"],
+                         
+            "COC_PCT_DE": calc_pct(man_def["DE"], man_def["GS"]),
+            "CDF_PCT_DE": calc_pct(vis_off["DE_FORCADA"], vis_off["GOLS"]),
+
+
+            # --- VISITANTE SIDE (Right Panel - Analisando Goleiro VISITANTE) ---
+            # AMEACAS: Chutes do Mandante (COC) e Sofridos pelo Visitante (CDF)
+            "COC_CHUTES_AG": man_off["CHUTES"],         
+            "CDF_CHUTES_AG": vis_def["CHUTES_CEDIDOS"], 
+            
+            "COC_CHUTES_PM": calc_pm(man_off["CHUTES"], man_off["GOLS"]),
+            "CDF_CHUTES_PM": calc_pm(vis_def["CHUTES_CEDIDOS"], vis_def["GS"]),
+            
+            "COC_GOLS": man_off["GOLS"],
+            "CDF_GOLS": vis_def["GS"],
+            
+            # OPORTUNIDADES: Defesas do Visitante (COF) e Forçadas pelo Mandante (CDC)
+            "COF_DE": vis_def["DE"],           
+            "CDC_DE": man_off["DE_FORCADA"],   
+            
+            "COF_SG": vis_def["SG"],           
+            "CDC_SG": man_off["JOGOS_SEM_MARCAR"],
+            
+            "COF_PCT_DE": calc_pct(vis_def["DE"], vis_def["GS"]),
+            "CDC_PCT_DE": calc_pct(man_off["DE_FORCADA"], man_off["GOLS"]),
+        }
+
+    # -------------------------------------------------------------------------
+    #                            LATERAIS (LE / LD)
+    # -------------------------------------------------------------------------
+
+    def get_laterais_aggregated(self, df_raw, window_n, time_filter=None, mando_filter=None):
+        """
+        Agrega estatísticas de Laterais (LE e LD) para um time específico.
+        """
+        df = df_raw.copy()
+        
+        if df.empty:
+             return {
+                "LE_DE": 0, "LE_PG": 0, "LE_BASICA": 0.0,
+                "LD_DE": 0, "LD_PG": 0, "LD_BASICA": 0.0,
+                "SG": 0
+            }
+        
+        # Filtros Básicos
+        if time_filter: df = df[df["TIME"] == time_filter]
+        
+        if mando_filter == "CASA": df = df[df["MANDO"] == "CASA"]
+        elif mando_filter == "FORA": df = df[df["MANDO"] == "FORA"]
+        
+        # Sort e Janela de JOGOS (Time-Adversário)
+        match_dates = df.groupby(["MATCH_ID", "DATA"]).first().sort_values("DATA")
+        
+        if window_n > 0:
+            match_dates = match_dates.tail(window_n)
+            
+        selected_matches = [idx[0] for idx in match_dates.index]
+        
+        if not selected_matches:
+            # Retorno vazio zerado
+            return {
+                "LE_DE": 0, "LE_PG": 0, "LE_BASICA": 0.0,
+                "LD_DE": 0, "LD_PG": 0, "LD_BASICA": 0.0,
+                "SG": 0
+            }
+            
+        # Filtrar o DF principal apenas com os jogos selecionados
+        df = df[df["MATCH_ID"].isin(selected_matches)]
+        
+        def is_le(pos):
+             try: return abs(float(pos) - 2.6) < 0.01
+             except: return False
+             
+        def is_ld(pos):
+             try: return abs(float(pos) - 2.2) < 0.01
+             except: return False
+
+        # --- CÁLCULO DAS MÉTRICAS ---
+        
+        # 1. SG (Clean Sheet do TIME) - Do Time no Jogo
+        # Agrupa por match e pega o max de SG (se alguem teve SG=1, o time teve)
+        jogos_sg = df.groupby("MATCH_ID")["SG"].max().sum()
+        
+        # 2. LE Stats
+        mask_le = df["POS_REAL"].apply(is_le)
+        df_le = df[mask_le]
+        
+        le_de = df_le["DS"].sum()
+        le_pg = (df_le["G"] + df_le["A"]).sum()
+        le_basica = df_le["BASICA"].mean() if len(df_le) > 0 else 0.0
+        
+        # 3. LD Stats
+        mask_ld = df["POS_REAL"].apply(is_ld)
+        df_ld = df[mask_ld]
+        
+        ld_de = df_ld["DS"].sum()
+        ld_pg = (df_ld["G"] + df_ld["A"]).sum()
+        ld_basica = df_ld["BASICA"].mean() if len(df_ld) > 0 else 0.0
+        
+        return {
+            "LE_DE": le_de,
+            "LE_PG": le_pg,
+            "LE_BASICA": le_basica,
+            "LD_DE": ld_de,
+            "LD_PG": ld_pg,
+            "LD_BASICA": ld_basica,
+            "SG": int(jogos_sg)
+        }
+
+    def generate_laterais_table(self, mandante, visitante, window_n=5, date_cutoff=None, mando_mode="POR_MANDO", rodada_curr=None):
+        # 1. Normalizar e converter para MAIÚSCULAS (df_pj usa MAIÚSCULAS)
+        mandante = config.TEAM_ALIASES.get(mandante, mandante).upper()
+        visitante = config.TEAM_ALIASES.get(visitante, visitante).upper()
+        
+        # 2. Configurar Filtros
+        if mando_mode == "POR_MANDO":
+            f_home = "CASA"
+            f_away = "FORA"
+        else:
+            f_home = None
+            f_away = None
+            
+        # 3. Preparar DF Raw (Todos os jogos, para poder buscar adversários)
+        df_all = self.df_pj.copy()
+        
+        # Auto-cutoff
+        if rodada_curr is not None:
+             try:
+                mask = (
+                    (self.df_pj["TIME"] == mandante) & 
+                    (self.df_pj["ADVERSARIO"] == visitante) &
+                    (self.df_pj["RODADA"].astype(str).str.replace(".0", "") == str(int(rodada_curr)))
+                )
+                match_row = self.df_pj[mask]
+                if not match_row.empty:
+                    df_all = df_all[df_all["DATA"] < match_row.iloc[0]["DATA"]]
+             except: pass
+             
+        # === LADO ESQUERDO (MANDANTE) ===
+        # Filtro: Jogos do Mandante (em Casa)
+        matches_man = df_all[df_all["TIME"] == mandante]
+        if f_home: matches_man = matches_man[matches_man["MANDO"] == f_home]
+        
+        # Pegar janela
+        if matches_man.empty:
+            coc_stats = self.get_laterais_aggregated(pd.DataFrame(), 0)
+            cdc_stats = self.get_laterais_aggregated(pd.DataFrame(), 0) # CDC: Cedido pelo Mandante (adversários do mandante)
+        else:
+            match_dates = matches_man.groupby("MATCH_ID")["DATA"].first().sort_values().tail(window_n)
+            selected_ids_man = match_dates.index.tolist()
+            
+            # COC: Stats do Mandante
+            df_man_games = df_all[(df_all["MATCH_ID"].isin(selected_ids_man)) & (df_all["TIME"] == mandante)]
+            coc_stats = self.get_laterais_aggregated(df_man_games, 0)
+            
+            # CDC: Stats dos Adversários do Mandante (Cedidos pelo Mandante)
+            # Na tabela, CDC fica na Direita (lado do Visitante)
+            df_opp_man_games = df_all[(df_all["MATCH_ID"].isin(selected_ids_man)) & (df_all["TIME"] != mandante)]
+            cdc_stats = self.get_laterais_aggregated(df_opp_man_games, 0)
+        
+        # === LADO DIREITO (VISITANTE) ===
+        # Filtro: Jogos do Visitante (Fora)
+        matches_vis = df_all[df_all["TIME"] == visitante]
+        if f_away: matches_vis = matches_vis[matches_vis["MANDO"] == f_away]
+        
+        if matches_vis.empty:
+            cof_stats = self.get_laterais_aggregated(pd.DataFrame(), 0)
+            cdf_stats = self.get_laterais_aggregated(pd.DataFrame(), 0) # CDF: Cedido pelo Visitante (adversários do visitante)
+        else:
+            match_dates_v = matches_vis.groupby("MATCH_ID")["DATA"].first().sort_values().tail(window_n)
+            selected_ids_vis = match_dates_v.index.tolist()
+            
+            # COF: Stats do Visitante
+            df_vis_games = df_all[(df_all["MATCH_ID"].isin(selected_ids_vis)) & (df_all["TIME"] == visitante)]
+            cof_stats = self.get_laterais_aggregated(df_vis_games, 0)
+            
+            # CDF: Stats dos Adversários do Visitante (Cedidos pelo Visitante)
+            # Na tabela, CDF fica na Esquerda (lado do Mandante)
+            df_opp_vis_games = df_all[(df_all["MATCH_ID"].isin(selected_ids_vis)) & (df_all["TIME"] != visitante)]
+            cdf_stats = self.get_laterais_aggregated(df_opp_vis_games, 0)
+        
+        return {
+            "MANDANTE": mandante, "VISITANTE": visitante,
+            
+            # --- MANDANTE (LEFT) ---
+            # LE
+            "COC_LE_DE": coc_stats["LE_DE"], "CDF_LE_DE": cdf_stats["LE_DE"],
+            "COC_LE_PG": coc_stats["LE_PG"], "CDF_LE_PG": cdf_stats["LE_PG"],
+            "COC_LE_BAS": coc_stats["LE_BASICA"], "CDF_LE_BAS": cdf_stats["LE_BASICA"],
+            # LD
+            "COC_LD_DE": coc_stats["LD_DE"], "CDF_LD_DE": cdf_stats["LD_DE"],
+            "COC_LD_PG": coc_stats["LD_PG"], "CDF_LD_PG": cdf_stats["LD_PG"],
+            "COC_LD_BAS": coc_stats["LD_BASICA"], "CDF_LD_BAS": cdf_stats["LD_BASICA"],
+            # SG
+            "COC_SG": coc_stats["SG"], "CDF_SG": cdf_stats["SG"],
+            
+            # --- VISITANTE (RIGHT) ---
+            # SG
+            "COF_SG": cof_stats["SG"], "CDC_SG": cdc_stats["SG"],
+            # LD
+            "COF_LD_DE": cof_stats["LD_DE"], "CDC_LD_DE": cdc_stats["LD_DE"],
+            "COF_LD_PG": cof_stats["LD_PG"], "CDC_LD_PG": cdc_stats["LD_PG"],
+            "COF_LD_BAS": cof_stats["LD_BASICA"], "CDC_LD_BAS": cdc_stats["LD_BASICA"],
+            # LE
+            "COF_LE_DE": cof_stats["LE_DE"], "CDC_LE_DE": cdc_stats["LE_DE"],
+            "COF_LE_PG": cof_stats["LE_PG"], "CDC_LE_PG": cdc_stats["LE_PG"],
+            "COF_LE_BAS": cof_stats["LE_BASICA"], "CDC_LE_BAS": cdc_stats["LE_BASICA"],
         }

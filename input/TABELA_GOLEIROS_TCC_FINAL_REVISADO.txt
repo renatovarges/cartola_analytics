@@ -2,20 +2,18 @@
 TABELA DE GOLEIROS — DOCUMENTO DESCRITIVO FINAL (TCC)
 
 1. OBJETIVO DA TABELA
-Esta tabela tem como objetivo analisar o desempenho de GOLEIROS no Cartola FC a partir
+Esta tabela tem como objetivo analisar o desempenho de GOLEIROS no Cartola a partir
 de dados objetivos, organizados por confronto (CASA x FORA), considerando:
+
 - Scouts CONQUISTADOS pelo time do goleiro
 - Scouts CEDIDOS pelo time adversário
 - Influência do mando de campo
 - Comparação direta entre os dois lados do confronto
 
-A tabela é um instrumento de APOIO À ANÁLISE HUMANA.
-Ela NÃO toma decisões, apenas organiza a informação de forma clara, comparável e visual.
-
 --------------------------------------------------
 2. BASE DE DADOS
 Fonte única:
-Planilha: SCOUTS_REORGANIZADO
+Planilha: será adicionada ao site a cada rodada para geração da tabela.
 
 Todos os dados já existem nesta planilha.
 O código Python apenas:
@@ -47,75 +45,64 @@ O código Python apenas:
 --------------------------------------------------
 4. ESTRUTURA GERAL DA TABELA
 
-A tabela é organizada SEM PERFIL DE JOGADOR.
-A análise é sempre por:
-- TIME
-- CONFRONTO
-- MANDO
+A TABELA DE GOLEIROS TEM UMA ESTRUTURA UM POUCO DIFERENTE, POIS TEM UMA DIVISÃO DAS COLUNAS NA PARTE SUPERIOR QUE DIVIDE OS SCOUTS EM AMEAÇAS X OPORTUINIDADES EM AMBOS OS LADOS DA TABELA.(EXEMPLO VISUAL EM ANEXO).
+
 
 A leitura é SIMÉTRICA:
 MANDANTE (lado esquerdo) x VISITANTE (lado direito)
 
 --------------------------------------------------
-5. SCOUTS UTILIZADOS (GOLEIROS)
 
-5.1. CHUT.AG — Chutes a Gol
-Quantidade de finalizações no alvo.
+MONTAGEM DA TABELA:
 
-- CONQUISTADO (COC):
-  Soma dos chutes no alvo sofridos pelo time do goleiro.
-- CEDIDO (CDF):
-  Soma dos chutes no alvo que o time adversário permite.
+LADO ESQUERDO
 
---------------------------------------------------
-5.2. CHUT.PM — Chutes para Marcar um Gol
-Relação entre finalizações e gols sofridos.
-É uma MÉDIA.
+SESSÃO "AMEAÇAS"
 
-- CONQUISTADO (COC):
-  Média de chutes necessários para o adversário marcar gol contra o time.
-- CEDIDO (CDF):
-  Média de chutes necessários para o time marcar gol contra o adversário.
+SCOUTS UTILIZADOS (GOLEIROS)
 
---------------------------------------------------
-5.3. GOLS
+1. CHUT.AG — Chutes a Gol - Quantidade de finalizações no alvo.
+
+- CONQUISTADO PELO VISITANTE(COF):
+  Soma dos chutes no alvo que o time adversário do goleiro conquistou.
+- CEDIDO EM CASA PELO MANDANTE(CDC):
+ Soma dos chutes no alvo sofridos pelo time do goleiro.
+
+2. CHUT.PM — Chutes para Marcar um Gol
+Relação entre finalizações e gols sofridos, ou seja, é a média de finalizações totais que um time soma para cada gol que marca.
+
+- CONQUISTADO (COF):
+  Média de chutes necessários para o adversário do goleiro (visitante) marcar um gol.
+- CEDIDO (CDC):
+  Média de chutes necessários para os adversários marcarem um gol no time mandante.
+
+3. GOLS
 Quantidade de gols sofridos.
 
-- CONQUISTADO (COC):
-  Soma de gols sofridos pelo time.
-- CEDIDO (CDF):
-  Soma de gols que o adversário costuma sofrer.
+- CONQUISTADO (COF):  Soma de gols MARCADOS PELO TIME VISITANTE.
+- CEDIDO (CDC): Soma de gols CEDIDO PELOS MANDANTE AOS SEUS ADVERSÁRIOS.
 
 --------------------------------------------------
-5.4. DE — Defesas
+SESSÃO "OPORTUNIDADES"
+
+4. DE — Defesas
 Quantidade total de defesas realizadas.
 
-- CONQUISTADO (COC):
-  Soma de defesas do time.
-- CEDIDO (CDF):
-  Soma de defesas que o adversário costuma conceder ao goleiro.
+- CONQUISTADO (COC):  Soma de defesas conquistadas pelo time do goleiro.
+- CEDIDO (CDF): Soma de defesas que o visitante cedeu aos goleiros adversários.
+
+5. SG — Clean Sheet - Bônus por jogo sem sofrer gols.
+
+- CONQUISTADO (COC): Soma de jogos em que o time mandante NÃO sofreu gols.
+- CEDIDO (CDF): Soma de jogos em que o visitante NÃO marcou gols.
+
+6. %DE — Percentual de Defesas. Eficiência do goleiro. É uma MÉDIA.
+
+- CONQUISTADO (COC): Média do percentual de defesas do goleiro do time mandante para que o visitante marque um gol. Média de defesas por gol sofrido.
+- CEDIDO (CDF): Média do percentual de defesas dos goleiros adversários do visitante para sofrer um gol. 
 
 --------------------------------------------------
-5.5. SG — Clean Sheet
-Bônus por jogo sem sofrer gols.
-
-- CONQUISTADO (COC):
-  Soma de jogos em que o time NÃO sofreu gols.
-- CEDIDO (CDF):
-  Soma de jogos em que o adversário NÃO sofreu gols.
-
---------------------------------------------------
-5.6. %DE — Percentual de Defesas
-Eficiência do goleiro.
-É uma MÉDIA.
-
-- CONQUISTADO (COC):
-  Média do percentual de defesas do time.
-- CEDIDO (CDF):
-  Média do percentual de defesas permitidas pelo adversário.
-
---------------------------------------------------
-6. MANDO DE CAMPO — CASA x FORA
+MANDO DE CAMPO — CASA x FORA
 
 Cada linha representa UM confronto.
 A coluna central da tabela contém:
@@ -127,15 +114,55 @@ Todos os scouts são recalculados considerando:
 - Desempenho do time quando atua FORA
 
 --------------------------------------------------
-7. CONQUISTADO x CEDIDO — DEFINIÇÃO FINAL
+LADO ESQUERDO
 
-- CONQUISTADO (COC):
-  O que o TIME do goleiro PRODUZ ou SOFRE quando joga naquele mando.
+SESSÃO "AMEAÇAS"
 
-- CEDIDO (CDF):
-  O que o ADVERSÁRIO COSTUMA PRODUZIR ou SOFRER contra goleiros.
 
-Essa simetria é o núcleo da análise.
+1. CHUT.AG — Chutes a Gol - Quantidade de finalizações no alvo.
+
+- CONQUISTADO PELO MANDANTE(COC): Soma dos chutes no alvo que o time mandante.
+
+- CEDIDO EM CASA PELO VISITANTE(CDF): Soma dos chutes no alvo sofridos pelo time do visitante.
+
+
+2. CHUT.PM — Chutes para Marcar um Gol
+Relação entre finalizações e gols sofridos, ou seja, é a média de finalizações totais que um time soma para cada gol que marca.
+
+- CONQUISTADO (COC): Média de chutes necessários para o mandante marcar um gol.
+- CEDIDO (CDF): Média de chutes necessários para os adversários do visitante marcarem um gol.
+
+3. GOLS - Quantidade de gols sofridos.
+
+- CONQUISTADO (COC): Soma de gols MARCADOS PELO TIME MANDANTE.
+- CEDIDO (CDF): Soma de gols CEDIDO PELOS VISITANTE AOS SEUS ADVERSÁRIOS.
+
+--------------------------------------------------
+SESSÃO "OPORTUNIDADES"
+
+4. DE — Defesas
+Quantidade total de defesas realizadas.
+
+- CONQUISTADO (COF):  Soma de defesas conquistadas pelo goleiro do time visitante.
+- CEDIDO (CDC): Soma de defesas que o mandante cedeu aos goleiros adversários.
+
+5. SG — Clean Sheet - Bônus por jogo sem sofrer gols.
+
+- CONQUISTADO (COF): Soma de jogos em que o time VISITANTE NÃO sofreu gols.
+- CEDIDO (CDC): Soma de jogos em que o MANDANTE NÃO marcou gols.
+
+6. %DE — Percentual de Defesas. Eficiência do goleiro. É uma MÉDIA.
+
+- CONQUISTADO (COF): Média do percentual de defesas do goleiro do time visitante por gol sofrido. Média de defesas por gol sofrido.
+- CEDIDO (CDC): Média percentual de defesas permitidas pelo time mandante para o goleiro adversário por gol sofrido. Média de defesas cedida pelo mandante para os goleiros adversários sofrerem um gol. 
+
+
+
+
+
+
+
+
 
 --------------------------------------------------
 8. FINALIDADE ANALÍTICA
