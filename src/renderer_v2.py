@@ -222,14 +222,14 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
         
         if "AF" in col_name:
             if position_type == "ATACANTES":
-                lim_elite, lim_bom, lim_media = 6.0, 5.0, 4.0
+                lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
             else:
-                lim_elite, lim_bom, lim_media = 8.0, 6.0, 4.0
+                lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
         elif "CHUTES" in col_name:
             if position_type == "ATACANTES":
-                lim_elite, lim_bom, lim_media = 7.0, 5.0, 4.0
+                lim_elite, lim_bom, lim_media = 6.0, 5.0, 3.0
             else:
-                lim_elite, lim_bom, lim_media = 7.0, 4.0, 3.0
+                lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
         elif "PG" in col_name:
             lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
         elif "BASICA" in col_name:
@@ -255,6 +255,43 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
         elif value >= t_media:
              # Acima da Média: Verde claro (#D8F3DC)
             return COLOR_MEDIA, "#081C15"
+            
+        return COLOR_ROW_ODD, "black"
+
+    # === HELPER UNIFICADO SG ===
+    def get_sg_color(val, n_jogos):
+        n = int(n_jogos)
+        # Regras do Usuário
+        # 5 jogos: 4+ Elite, 3 Bom, 2 Médio
+        # 4 jogos: 4+ Elite, 3 Bom, 2 Médio
+        # 3 jogos: 3+ Elite, 2 Bom, 1 Médio
+        # 2 jogos: 2+ Elite, 1 Bom
+        # 1 jogo:  1+ Elite
+        
+        # Elite
+        if n == 5 and val >= 4: return COLOR_ELITE, "white"
+        if n == 4 and val >= 4: return COLOR_ELITE, "white"
+        if n == 3 and val >= 3: return COLOR_ELITE, "white"
+        if n == 2 and val >= 2: return COLOR_ELITE, "white"
+        if n == 1 and val >= 1: return COLOR_ELITE, "white"
+        
+        # Bom
+        if n == 5 and val >= 3: return COLOR_BOM, "#081C15"
+        if n == 4 and val >= 3: return COLOR_BOM, "#081C15"
+        if n == 3 and val >= 2: return COLOR_BOM, "#081C15"
+        if n == 2 and val >= 1: return COLOR_BOM, "#081C15"
+        
+        # Médio
+        if n == 5 and val >= 2: return COLOR_MEDIA, "#081C15"
+        if n == 4 and val >= 2: return COLOR_MEDIA, "#081C15"
+        if n == 3 and val >= 1: return COLOR_MEDIA, "#081C15"
+        
+        # Fallback para janelas maiores/outras
+        if n > 5:
+            ratio = val / n
+            if ratio >= 0.8: return COLOR_ELITE, "white"
+            if ratio >= 0.6: return COLOR_BOM, "#081C15"
+            if ratio >= 0.4: return COLOR_MEDIA, "#081C15"
             
         return COLOR_ROW_ODD, "black"
 
@@ -736,29 +773,7 @@ def render_zagueiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TOD
         
         # 1. Regra Especial para SG (Depende de N)
         if "SG" in col_name:
-            n_int = int(n_jogos)
-            # Regras Explicitas do Usuário
-            if n_int == 5:
-                if value >= 4: return COLOR_ELITE, "white"
-                elif value >= 3: return COLOR_BOM, "#081C15"
-                elif value >= 2: return COLOR_MEDIA, "#081C15"
-            elif n_int == 3:
-                if value >= 3: return COLOR_ELITE, "white"
-                elif value >= 2: return COLOR_BOM, "#081C15"
-                elif value >= 1: return COLOR_MEDIA, "#081C15"
-            elif n_int == 2:
-                if value >= 2: return COLOR_ELITE, "white"
-                elif value >= 1: return COLOR_BOM, "#081C15"
-            elif n_int == 1:
-                if value >= 1: return COLOR_ELITE, "white"
-            else:
-                # Fallback para outros N (Proporcional)
-                ratio = value / n_jogos
-                if ratio >= 0.8: return COLOR_ELITE, "white"     # 80%+
-                elif ratio >= 0.6: return COLOR_BOM, "#081C15"   # 60%+
-                elif ratio >= 0.4: return COLOR_MEDIA, "#081C15" # 40%+
-            
-            return COLOR_ROW_ODD, "black"
+            return get_sg_color(value, n_jogos)
 
         # 2. Regras Por Jogo (DE, CHUTES, PTS)
         is_avg = False
@@ -1249,24 +1264,9 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
 
         # 6. SG (Clean Sheets)
         elif "SG" in col_name:
-            if n_jogos >= 5:
-                if val >= 4: return C_ELITE, TXT_BLACK
-                elif val >= 3: return C_BOM, TXT_BLACK
-                elif val >= 2: return C_CLARO, TXT_BLACK
-            elif n_jogos >= 3:
-                # 3 Elite, 2 Bom, 1 Claro
-                if val >= 3: return C_ELITE, TXT_BLACK
-                elif val >= 2: return C_BOM, TXT_BLACK
-                elif val >= 1: return C_CLARO, TXT_BLACK
-            elif n_jogos == 2:
-                # 2 Elite, 1 Bom
-                if val >= 2: return C_ELITE, TXT_BLACK
-                elif val >= 1: return C_BOM, TXT_BLACK
-            elif n_jogos == 1:
-                # 1 Elite
-                if val >= 1: return C_ELITE, TXT_BLACK
-                
-            return C_DEFAULT, TXT_BLACK
+            return get_sg_color(val, n_jogos)
+            
+        return C_DEFAULT, TXT_BLACK
         
         return C_DEFAULT, TXT_BLACK
         
@@ -1673,9 +1673,10 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
         # Logica preliminar (User vai refinar)
         # DE (Desarmes)
         if "_DE" in col_name and "PCT" not in col_name:
-            if val >= 4: return C_ELITE, TXT
-            elif val >= 3: return C_BOM, TXT
-            elif val >= 2: return C_CLARO, TXT
+            # 4 por jogo (Elite), 3 (Bom), 2 (Médio)
+            if val >= 4.0 * n_jogos: return C_ELITE, TXT
+            elif val >= 3.0 * n_jogos: return C_BOM, TXT
+            elif val >= 2.0 * n_jogos: return C_CLARO, TXT
             
         # PG (Gols + Ass)
         elif "_PG" in col_name:
@@ -1689,8 +1690,7 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
              
         # SG
         elif "_SG" in col_name:
-             if n_jogos >= 5 and val >= 3: return C_ELITE, TXT
-             if n_jogos >= 5 and val >= 2: return C_BOM, TXT
+             return get_sg_color(val, n_jogos)
              
         return C_DEFAULT, TXT
 
