@@ -4,8 +4,10 @@ from src.renderer_v2 import render_laterais_table
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import os
 # Hardcoded path to avoid config import issues
-INPUT_FILE = r"C:\Users\User\.gemini\antigravity\scratch\cartola_analytics\input\Scouts_Reorganizado.xlsx"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_FILE = os.path.join(BASE_DIR, "input", "Scouts_Reorganizado.xlsx")
 
 GAMES = [
     ("ATLÉTICO-MG", "PALMEIRAS"),

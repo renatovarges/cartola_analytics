@@ -3,8 +3,10 @@ from src.renderer_v2 import render_atacantes_table
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import os
 # Arquivo real
-INPUT_FILE = r"C:\Users\User\.gemini\antigravity\scratch\cartola_analytics\input\Scouts_Reorganizado.xlsx"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_FILE = os.path.join(BASE_DIR, "input", "Scouts_Reorganizado.xlsx")
 engine = CartolaEngine(INPUT_FILE)
 
 # Gerar dados Atacantes Cruzeiro x Coritiba (RODADA 2, usando N=1, filtro TODOS)

@@ -3,8 +3,10 @@ import pandas as pd
 import os
 
 # Configuração de Teste
-FILE_PATH = r"C:\Users\User\.gemini\antigravity\scratch\cartola_analytics\input\Scouts_Reorganizado.xlsx"
-OUTPUT_DIR = r"C:\Users\User\.gemini\antigravity\scratch\cartola_analytics\metrics"
+# Configuração de Teste
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FILE_PATH = os.path.join(BASE_DIR, "input", "Scouts_Reorganizado.xlsx")
+OUTPUT_DIR = os.path.join(BASE_DIR, "metrics")
 DATA_CORTE = "2025-12-31" 
 N_GAMES = 5 
 

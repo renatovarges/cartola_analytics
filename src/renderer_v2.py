@@ -19,6 +19,227 @@ COLOR_ROW_EVEN  = "#FFFFFF"
 COLOR_ROW_ODD   = "#F8F9FA"  # Leve cinza para diferenciar linhas? Ou manter branco? Usuario nao pediu linhas zebradas. Manter branco.
 # COLOR_ROW_ODD = "#FFFFFF"
 
+# === CORES GERAIS (PREMIUM PASTEL V2) ===
+COLOR_ELITE = "#52B788" 
+COLOR_BOM   = "#95D5B2"
+COLOR_MEDIA = "#D8F3DC"
+COLOR_CLARO = "#D8F3DC"
+COLOR_DEFAULT = "white"
+
+# === HELPER UNIFICADO SG ===
+def get_sg_color(val, n_jogos):
+    n = int(n_jogos)
+    # Regras do Usuário
+    # 5 jogos: 4+ Elite, 3 Bom, 2 Médio
+    # 4 jogos: 4+ Elite, 3 Bom, 2 Médio
+    # 3 jogos: 3+ Elite, 2 Bom, 1 Médio
+    # 2 jogos: 2+ Elite, 1 Bom
+    # 1 jogo:  1+ Elite
+    
+    # Elite
+    if n == 5 and val >= 4: return COLOR_ELITE, "white"
+    if n == 4 and val >= 4: return COLOR_ELITE, "white"
+    if n == 3 and val >= 3: return COLOR_ELITE, "white"
+    if n == 2 and val >= 2: return COLOR_ELITE, "white"
+    if n == 1 and val >= 1: return COLOR_ELITE, "white"
+    
+    # Bom
+    if n == 5 and val >= 3: return COLOR_BOM, "#081C15"
+    if n == 4 and val >= 3: return COLOR_BOM, "#081C15"
+    if n == 3 and val >= 2: return COLOR_BOM, "#081C15"
+    if n == 2 and val >= 1: return COLOR_BOM, "#081C15"
+    
+    # Médio
+    if n == 5 and val >= 2: return COLOR_MEDIA, "#081C15"
+    if n == 4 and val >= 2: return COLOR_MEDIA, "#081C15"
+    if n == 3 and val >= 1: return COLOR_MEDIA, "#081C15"
+    
+    # Fallback para janelas maiores/outras
+    if n > 5:
+        ratio = val / n
+        if ratio >= 0.8: return COLOR_ELITE, "white"
+        if ratio >= 0.6: return COLOR_BOM, "#081C15"
+        if ratio >= 0.4: return COLOR_MEDIA, "#081C15"
+        
+    return COLOR_ROW_ODD, "black"
+
+def get_color_for_value(col_name, value, n_jogos, position_type="MEIAS"):
+    if value <= 0: return COLOR_ROW_ODD, "black" # Sem destaque
+    
+    is_avg = False
+    
+    # 1. Definir Limites Base (POR JOGO)
+    # AF: Elite 8/jogo, Bom 6/jogo, Media 4/jogo (?) - (User provided high numbers, implementing literally)
+    # CHUTES: Elite 7/jogo, Bom 4/jogo, Media 3/jogo
+    # PG: Elite 3/jogo, Bom 2/jogo, Media 1/jogo
+    # BÁSICA: Elite 3.5, Bom 2.5, Media 1.5 (Valores fixos média)
+    
+    if "AF" in col_name:
+        if position_type == "ATACANTES":
+            lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
+        else:
+            lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
+    elif "CHUTES" in col_name:
+        if position_type == "ATACANTES":
+            lim_elite, lim_bom, lim_media = 6.0, 5.0, 3.0
+        else:
+            lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
+    elif "PG" in col_name:
+        lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
+    elif "BASICA" in col_name:
+        lim_elite, lim_bom, lim_media = 3.5, 2.5, 1.5
+        is_avg = True
+    else:
+        return COLOR_ROW_ODD, "black"
+        
+    # 2. Escalar Limites pelo N (apenas se for Soma)
+    factor = 1.0 if is_avg else float(n_jogos)
+    
+    t_elite = lim_elite * factor
+    t_bom   = lim_bom * factor
+    t_media = lim_media * factor
+    
+    # 3. Comparar Val >= Threshold
+    if value >= t_elite:
+        # Elite: Fundo verde escuro premium
+        return COLOR_ELITE, "white"
+    elif value >= t_bom:
+        # Bom: Verde médio (#95D5B2)
+        return COLOR_BOM, "#081C15" 
+    elif value >= t_media:
+            # Acima da Média: Verde claro (#D8F3DC)
+        return COLOR_MEDIA, "#081C15"
+        
+    return COLOR_ROW_ODD, "black"
+
+def get_color_zag(col_name, value, n_jogos):
+    if value <= 0: return COLOR_ROW_ODD, "black"
+    
+    # 1. Regra Especial para SG (Depende de N)
+    if "SG" in col_name:
+        return get_sg_color(value, n_jogos)
+
+    # 2. Regras Por Jogo (DE, CHUTES, PTS)
+    is_avg = False
+    lim_elite, lim_bom, lim_media = 999, 999, 999
+    
+    if "DE" in col_name:
+            # Sugestão: 4, 3, 2 (User Request)
+            lim_elite, lim_bom, lim_media = 4.0, 3.0, 2.0
+            is_avg = False
+    elif "CHUTES" in col_name:
+            # Sugestão: 3.0, 2.0, 1.0 (Manter)
+            lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
+            is_avg = False
+    elif "PTS" in col_name:
+            # Sugestão: 7.0, 5.0, 4.0
+            lim_elite, lim_bom, lim_media = 7.0, 5.0, 4.0
+            is_avg = True
+    elif "BASICA" in col_name:
+            # Mantendo padrão Meias para Básica (Exceto Media = 2.0)
+            lim_elite, lim_bom, lim_media = 3.5, 2.5, 2.0
+            is_avg = True
+    else:
+        return COLOR_ROW_ODD, "black"
+        
+    factor = 1.0 if is_avg else float(n_jogos)
+    
+    if value >= lim_elite * factor: return COLOR_ELITE, "white"
+    elif value >= lim_bom * factor : return COLOR_BOM, "#081C15"
+    elif value >= lim_media * factor: return COLOR_MEDIA, "#081C15"
+    return COLOR_ROW_ODD, "black"
+
+def get_color_gol(col_name, value, n_jogos):
+    TXT_BLACK = "black"
+    
+    try:
+        val = float(value)
+    except:
+        return COLOR_DEFAULT, TXT_BLACK
+
+    # 1. CHUTES A GOL (AG) ou CHUTES GERAIS
+    if "CHUT. AG" in col_name or "_CHUTES_AG" in col_name:
+        if val >= 6.0 * n_jogos: return COLOR_ELITE, TXT_BLACK
+        elif val >= 5.0 * n_jogos: return COLOR_BOM, TXT_BLACK
+        elif val >= 4.0 * n_jogos: return COLOR_CLARO, TXT_BLACK
+        return COLOR_DEFAULT, TXT_BLACK
+
+    # 2. CHUTES PM (Para Marcar)
+    # Regra: Elite 5, Bom 4, Claro 3
+    elif "CHUT. PM" in col_name or "_PM" in col_name:
+        if val >= 5.0: return COLOR_ELITE, TXT_BLACK
+        elif val >= 4.0: return COLOR_BOM, TXT_BLACK
+        elif val >= 3.0: return COLOR_CLARO, TXT_BLACK
+        return COLOR_DEFAULT, TXT_BLACK
+
+    # 3. DEFESAS (DE)
+    elif "DE" in col_name and "%" not in col_name and "PCT" not in col_name:
+        if val >= 5.0 * n_jogos: return COLOR_ELITE, TXT_BLACK
+        elif val >= 4.0 * n_jogos: return COLOR_BOM, TXT_BLACK
+        elif val >= 3.0 * n_jogos: return COLOR_CLARO, TXT_BLACK
+        return COLOR_DEFAULT, TXT_BLACK
+
+    # 4. % DE (% Defesas)
+    elif "% DE" in col_name or "PCT_DE" in col_name:
+        if val >= 80.0: return COLOR_ELITE, TXT_BLACK
+        elif val >= 67.0: return COLOR_BOM, TXT_BLACK
+        elif val >= 60.0: return COLOR_CLARO, TXT_BLACK
+        return COLOR_DEFAULT, TXT_BLACK
+
+    # 5. GOLS (Inverso - Menor é melhor)
+    elif "GOLS" in col_name:
+        if n_jogos >= 5:
+            if val <= 1: return COLOR_ELITE, TXT_BLACK
+            elif val <= 2: return COLOR_BOM, TXT_BLACK
+            elif val <= 3: return COLOR_CLARO, TXT_BLACK
+        elif n_jogos >= 3:
+            if val <= 0: return COLOR_ELITE, TXT_BLACK
+            elif val <= 1: return COLOR_BOM, TXT_BLACK
+            elif val <= 2: return COLOR_CLARO, TXT_BLACK
+        elif n_jogos == 2:
+            if val <= 0: return COLOR_ELITE, TXT_BLACK
+            elif val <= 1: return COLOR_BOM, TXT_BLACK
+        elif n_jogos == 1:
+            if val <= 0: return COLOR_ELITE, TXT_BLACK
+        
+        return COLOR_DEFAULT, TXT_BLACK
+
+    # 6. SG (Clean Sheets)
+    elif "SG" in col_name:
+        return get_sg_color(val, n_jogos)
+        
+    return COLOR_DEFAULT, TXT_BLACK
+
+def get_color_lat(col_name, value, n_jogos):
+    TXT = "black"
+    
+    try: val = float(value)
+    except: return COLOR_DEFAULT, TXT
+    
+    # logica preliminar (User vai refinar)
+    # DE (Desarmes)
+    if "_DE" in col_name and "PCT" not in col_name:
+        # 4 por jogo (Elite), 3 (Bom), 2 (Médio)
+        if val >= 4.0 * n_jogos: return COLOR_ELITE, TXT
+        elif val >= 3.0 * n_jogos: return COLOR_BOM, TXT
+        elif val >= 2.0 * n_jogos: return COLOR_MEDIA, TXT
+        
+    # PG (Gols + Ass)
+    elif "_PG" in col_name:
+        if val >= 1: return COLOR_ELITE, TXT # 1 gol/ass é mto bom p lateral
+        
+    # BAS (Basica)
+    elif "_BAS" in col_name:
+            if val >= 4.0: return COLOR_ELITE, TXT
+            elif val >= 3.0: return COLOR_BOM, TXT
+            elif val >= 2.0: return COLOR_MEDIA, TXT
+            
+    # SG
+    elif "_SG" in col_name:
+            return get_sg_color(val, n_jogos)
+            
+    return COLOR_DEFAULT, TXT
+
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets")
 
 def load_image(path):
@@ -205,95 +426,6 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
     COLOR_MEDIA = "#D8F3DC"
     
     COLOR_WHITE = "#FFFFFF"
-
-    # === LÓGICA DE REGRAS (PERSONALIZADA USUÁRIO) ===
-    # Regras baseadas no número de jogos (N)
-    
-    def get_color_for_value(col_name, value, n_jogos):
-        if value <= 0: return COLOR_ROW_ODD, "black" # Sem destaque
-        
-        is_avg = False
-        
-        # 1. Definir Limites Base (POR JOGO)
-        # AF: Elite 8/jogo, Bom 6/jogo, Media 4/jogo (?) - (User provided high numbers, implementing literally)
-        # CHUTES: Elite 7/jogo, Bom 4/jogo, Media 3/jogo
-        # PG: Elite 3/jogo, Bom 2/jogo, Media 1/jogo
-        # BÁSICA: Elite 3.5, Bom 2.5, Media 1.5 (Valores fixos média)
-        
-        if "AF" in col_name:
-            if position_type == "ATACANTES":
-                lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
-            else:
-                lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
-        elif "CHUTES" in col_name:
-            if position_type == "ATACANTES":
-                lim_elite, lim_bom, lim_media = 6.0, 5.0, 3.0
-            else:
-                lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
-        elif "PG" in col_name:
-            lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
-        elif "BASICA" in col_name:
-            lim_elite, lim_bom, lim_media = 3.5, 2.5, 1.5
-            is_avg = True
-        else:
-            return COLOR_ROW_ODD, "black"
-            
-        # 2. Escalar Limites pelo N (apenas se for Soma)
-        factor = 1.0 if is_avg else float(n_jogos)
-        
-        t_elite = lim_elite * factor
-        t_bom   = lim_bom * factor
-        t_media = lim_media * factor
-        
-        # 3. Comparar Val >= Threshold
-        if value >= t_elite:
-            # Elite: Fundo verde escuro premium
-            return COLOR_ELITE, "white"
-        elif value >= t_bom:
-            # Bom: Verde médio (#95D5B2)
-            return COLOR_BOM, "#081C15" 
-        elif value >= t_media:
-             # Acima da Média: Verde claro (#D8F3DC)
-            return COLOR_MEDIA, "#081C15"
-            
-        return COLOR_ROW_ODD, "black"
-
-    # === HELPER UNIFICADO SG ===
-    def get_sg_color(val, n_jogos):
-        n = int(n_jogos)
-        # Regras do Usuário
-        # 5 jogos: 4+ Elite, 3 Bom, 2 Médio
-        # 4 jogos: 4+ Elite, 3 Bom, 2 Médio
-        # 3 jogos: 3+ Elite, 2 Bom, 1 Médio
-        # 2 jogos: 2+ Elite, 1 Bom
-        # 1 jogo:  1+ Elite
-        
-        # Elite
-        if n == 5 and val >= 4: return COLOR_ELITE, "white"
-        if n == 4 and val >= 4: return COLOR_ELITE, "white"
-        if n == 3 and val >= 3: return COLOR_ELITE, "white"
-        if n == 2 and val >= 2: return COLOR_ELITE, "white"
-        if n == 1 and val >= 1: return COLOR_ELITE, "white"
-        
-        # Bom
-        if n == 5 and val >= 3: return COLOR_BOM, "#081C15"
-        if n == 4 and val >= 3: return COLOR_BOM, "#081C15"
-        if n == 3 and val >= 2: return COLOR_BOM, "#081C15"
-        if n == 2 and val >= 1: return COLOR_BOM, "#081C15"
-        
-        # Médio
-        if n == 5 and val >= 2: return COLOR_MEDIA, "#081C15"
-        if n == 4 and val >= 2: return COLOR_MEDIA, "#081C15"
-        if n == 3 and val >= 1: return COLOR_MEDIA, "#081C15"
-        
-        # Fallback para janelas maiores/outras
-        if n > 5:
-            ratio = val / n
-            if ratio >= 0.8: return COLOR_ELITE, "white"
-            if ratio >= 0.6: return COLOR_BOM, "#081C15"
-            if ratio >= 0.4: return COLOR_MEDIA, "#081C15"
-            
-        return COLOR_ROW_ODD, "black"
 
     # === LINHAS DE DADOS - COLADAS ===
     row_h = 0.065
@@ -763,47 +895,7 @@ def render_zagueiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TOD
         ax.plot([x_pos, x_pos], [sub_header_y, sub_header_y + sub_header_h],
                color='black', linewidth=0.5, transform=ax.transAxes, zorder=51)
 
-    # === CORES ZAGUEIROS (PREMIUM PASTEL V2) ===
-    COLOR_ELITE = "#52B788" 
-    COLOR_BOM   = "#95D5B2"
-    COLOR_MEDIA = "#D8F3DC"
-    
-    def get_color_zag(col_name, value, n_jogos):
-        if value <= 0: return COLOR_ROW_ODD, "black"
-        
-        # 1. Regra Especial para SG (Depende de N)
-        if "SG" in col_name:
-            return get_sg_color(value, n_jogos)
-
-        # 2. Regras Por Jogo (DE, CHUTES, PTS)
-        is_avg = False
-        lim_elite, lim_bom, lim_media = 999, 999, 999
-        
-        if "DE" in col_name:
-             # Sugestão: 5, 3, 2
-             lim_elite, lim_bom, lim_media = 5.0, 3.0, 2.0
-             is_avg = False
-        elif "CHUTES" in col_name:
-             # Sugestão: 3.0, 2.0, 1.0
-             lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
-             is_avg = False
-        elif "PTS" in col_name:
-             # Sugestão: 7.0, 5.0, 4.0
-             lim_elite, lim_bom, lim_media = 7.0, 5.0, 4.0
-             is_avg = True
-        elif "BASICA" in col_name:
-             # Mantendo padrão Meias para Básica
-             lim_elite, lim_bom, lim_media = 3.5, 2.5, 1.5
-             is_avg = True
-        else:
-            return COLOR_ROW_ODD, "black"
-            
-        factor = 1.0 if is_avg else float(n_jogos)
-        
-        if value >= lim_elite * factor: return COLOR_ELITE, "white"
-        elif value >= lim_bom * factor : return COLOR_BOM, "#081C15"
-        elif value >= lim_media * factor: return COLOR_MEDIA, "#081C15"
-        return COLOR_ROW_ODD, "black"
+    # === ROWS ===
 
     # === ROWS ===
     row_h = 0.065
@@ -1189,86 +1281,7 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
         ax.plot([x_pos, x_pos], [data_labels_y, data_labels_y + data_labels_h],
                color='black', linewidth=0.5, transform=ax.transAxes, zorder=51)
 
-    # === CORES GOLEIROS (PREMIUM) ===
-    COLOR_ELITE = "#52B788" 
-    COLOR_BOM   = "#95D5B2"
-    COLOR_MEDIA = "#D8F3DC"
-    
-    def get_color_gol(col_name, value, n_jogos):
-        # Definições de Cores
-        C_ELITE = "#52B788" # Verde Escuro (Elite)
-        C_BOM   = "#95D5B2" # Verde Médio (Bom)
-        C_CLARO = "#D8F3DC" # Verde Claro
-        C_DEFAULT = "white"
-        TXT_BLACK = "black" # Texto sempre preto para legibilidade nesses tons claros
-
-        try:
-            val = float(value)
-        except:
-            return C_DEFAULT, TXT_BLACK
-
-        # 1. CHUTES A GOL (AG) ou CHUTES GERAIS
-        if "CHUT. AG" in col_name or "_CHUTES_AG" in col_name:
-            if val >= 6.0 * n_jogos: return C_ELITE, TXT_BLACK
-            elif val >= 5.0 * n_jogos: return C_BOM, TXT_BLACK
-            elif val >= 4.0 * n_jogos: return C_CLARO, TXT_BLACK
-            return C_DEFAULT, TXT_BLACK
-
-        # 2. CHUTES PM (Para Marcar)
-        # Regra: Elite 5, Bom 4, Claro 3
-        elif "CHUT. PM" in col_name or "_PM" in col_name:
-            if val >= 5.0: return C_ELITE, TXT_BLACK
-            elif val >= 4.0: return C_BOM, TXT_BLACK
-            elif val >= 3.0: return C_CLARO, TXT_BLACK
-            return C_DEFAULT, TXT_BLACK
-
-        # 3. DEFESAS (DE)
-        elif "DE" in col_name and "%" not in col_name and "PCT" not in col_name:
-            if val >= 5.0 * n_jogos: return C_ELITE, TXT_BLACK
-            elif val >= 4.0 * n_jogos: return C_BOM, TXT_BLACK
-            elif val >= 3.0 * n_jogos: return C_CLARO, TXT_BLACK
-            return C_DEFAULT, TXT_BLACK
-
-        # 4. % DE (% Defesas)
-        elif "% DE" in col_name or "PCT_DE" in col_name:
-            # Value pode vir como 80.0 ou 0.8? Renderer divide por 100? NÃO, value é bruto.
-            # O texto formata com %. Se value for 80, ok. Se for 0.8, *100.
-            # Assumindo escala 0-100 baseada no formatação anterior ({:.0f}%).
-            # Mas engine calc_pct retorna * 100. Então é 0-100.
-            if val >= 80.0: return C_ELITE, TXT_BLACK
-            elif val >= 67.0: return C_BOM, TXT_BLACK
-            elif val >= 60.0: return C_CLARO, TXT_BLACK
-            return C_DEFAULT, TXT_BLACK
-
-        # 5. GOLS (Inverso - Menor é melhor)
-        elif "GOLS" in col_name:
-            # Regras por Janela
-            if n_jogos >= 5:
-                if val <= 1: return C_ELITE, TXT_BLACK
-                elif val <= 2: return C_BOM, TXT_BLACK
-                elif val <= 3: return C_CLARO, TXT_BLACK
-            elif n_jogos >= 3:
-                # Elite 0, Med 1, Claro 2
-                if val <= 0: return C_ELITE, TXT_BLACK
-                elif val <= 1: return C_BOM, TXT_BLACK
-                elif val <= 2: return C_CLARO, TXT_BLACK
-            elif n_jogos == 2:
-                # Elite 0, Med 1
-                if val <= 0: return C_ELITE, TXT_BLACK
-                elif val <= 1: return C_BOM, TXT_BLACK
-            elif n_jogos == 1:
-                # Elite 0
-                if val <= 0: return C_ELITE, TXT_BLACK
-            
-            return C_DEFAULT, TXT_BLACK
-
-        # 6. SG (Clean Sheets)
-        elif "SG" in col_name:
-            return get_sg_color(val, n_jogos)
-            
-        return C_DEFAULT, TXT_BLACK
-        
-        return C_DEFAULT, TXT_BLACK
+    # === ROWS ===
         
         
     # === ROWS ===
@@ -1659,40 +1672,7 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
         x_pos = start_x + sum(col_widths[:i])
         ax.plot([x_pos, x_pos], [data_labels_y, data_labels_y + data_labels_h], color='black', linewidth=0.5, transform=ax.transAxes, zorder=51)
 
-    # === CORES LATERAIS (PLACEHOLDER) ===
-    def get_color_lat(col_name, value, n_jogos):
-        C_ELITE = "#52B788"
-        C_BOM   = "#95D5B2"
-        C_CLARO = "#D8F3DC"
-        C_DEFAULT = "white"
-        TXT = "black"
-        
-        try: val = float(value)
-        except: return C_DEFAULT, TXT
-        
-        # Logica preliminar (User vai refinar)
-        # DE (Desarmes)
-        if "_DE" in col_name and "PCT" not in col_name:
-            # 4 por jogo (Elite), 3 (Bom), 2 (Médio)
-            if val >= 4.0 * n_jogos: return C_ELITE, TXT
-            elif val >= 3.0 * n_jogos: return C_BOM, TXT
-            elif val >= 2.0 * n_jogos: return C_CLARO, TXT
-            
-        # PG (Gols + Ass)
-        elif "_PG" in col_name:
-            if val >= 1: return C_ELITE, TXT # 1 gol/ass é mto bom p lateral
-            
-        # BAS (Basica)
-        elif "_BAS" in col_name:
-             if val >= 4.0: return C_ELITE, TXT
-             elif val >= 3.0: return C_BOM, TXT
-             elif val >= 2.0: return C_CLARO, TXT
-             
-        # SG
-        elif "_SG" in col_name:
-             return get_sg_color(val, n_jogos)
-             
-        return C_DEFAULT, TXT
+    # === ROWS ===
 
     # === ROWS ===
     row_h = 0.065

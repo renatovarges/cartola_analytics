@@ -1,6 +1,9 @@
+import os
 
 # Mapeamento de Arquivos e Pastas
-INPUT_DIR = r"C:\Users\User\.gemini\antigravity\scratch\cartola_analytics\input"
+# Caminho base do projeto (raiz do projeto, subindo de src/ para raiz)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+INPUT_DIR = os.path.join(BASE_DIR, "input")
 EXCEL_FILE = "Scouts_Reorganizado.xlsx"
 
 # Nomes das Abas do Excel

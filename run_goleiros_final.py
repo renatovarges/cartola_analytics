@@ -3,8 +3,10 @@ from src.engine import CartolaEngine
 from src.renderer_v2 import render_goleiros_table
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
 # from src.config import FILE_PATH as INPUT_FILE
-INPUT_FILE = r"C:\Users\User\.gemini\antigravity\scratch\cartola_analytics\input\Scouts_Reorganizado.xlsx"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_FILE = os.path.join(BASE_DIR, "input", "Scouts_Reorganizado.xlsx")
 
 # Jogos para teste (Rodada Fictícia ou Real)
 # Lista de tuplas (Mandante, Visitante)
