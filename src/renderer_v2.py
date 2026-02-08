@@ -1194,9 +1194,9 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
 
         # 1. CHUTES A GOL (AG) ou CHUTES GERAIS
         if "CHUT. AG" in col_name or "_CHUTES_AG" in col_name:
-            if val >= 6.0: return C_ELITE, TXT_BLACK
-            elif val >= 5.0: return C_BOM, TXT_BLACK
-            elif val >= 4.0: return C_CLARO, TXT_BLACK
+            if val >= 6.0 * n_jogos: return C_ELITE, TXT_BLACK
+            elif val >= 5.0 * n_jogos: return C_BOM, TXT_BLACK
+            elif val >= 4.0 * n_jogos: return C_CLARO, TXT_BLACK
             return C_DEFAULT, TXT_BLACK
 
         # 2. CHUTES PM (Para Marcar)
@@ -1209,9 +1209,9 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
 
         # 3. DEFESAS (DE)
         elif "DE" in col_name and "%" not in col_name and "PCT" not in col_name:
-            if val >= 5.0: return C_ELITE, TXT_BLACK
-            elif val >= 4.0: return C_BOM, TXT_BLACK
-            elif val >= 3.0: return C_CLARO, TXT_BLACK
+            if val >= 5.0 * n_jogos: return C_ELITE, TXT_BLACK
+            elif val >= 4.0 * n_jogos: return C_BOM, TXT_BLACK
+            elif val >= 3.0 * n_jogos: return C_CLARO, TXT_BLACK
             return C_DEFAULT, TXT_BLACK
 
         # 4. % DE (% Defesas)
@@ -1673,9 +1673,9 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
         # Logica preliminar (User vai refinar)
         # DE (Desarmes)
         if "_DE" in col_name and "PCT" not in col_name:
-            if val >= 4: return C_ELITE, TXT
-            elif val >= 3: return C_BOM, TXT
-            elif val >= 2: return C_CLARO, TXT
+            if val >= 4 * n_jogos: return C_ELITE, TXT
+            elif val >= 3 * n_jogos: return C_BOM, TXT
+            elif val >= 2 * n_jogos: return C_CLARO, TXT
             
         # PG (Gols + Ass)
         elif "_PG" in col_name:
