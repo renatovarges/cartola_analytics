@@ -20,3 +20,16 @@ pip-delete-this-directory.txt
 # Sistema
 .DS_Store
 Thumbs.db
+
+# PNGs de teste (gerados localmente)
+LATERAIS_TESTE_*.png
+PROVA_FINAL_*.png
+TABELA_*_TESTE.png
+TABELA_*_FINAL_HD.png
+
+# Arquivos temporários
+input/temp_upload.xlsx
+input/Scouts_Reorganizado_BACKUP.xlsx
+
+# Dados locais não necessários na nuvem
+debug_laterais_output.csv

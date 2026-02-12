@@ -2,14 +2,45 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+import tempfile
 
 # Adiciona o diretório raiz ao sys.path para permitir "from src.engine ..."
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.engine import CartolaEngine
-import os
 
 st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
+
+# === PROTEÇÃO POR PIN ===
+def check_pin():
+    """Verifica PIN de acesso usando st.secrets."""
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if st.session_state.authenticated:
+        return True
+    
+    st.markdown("## 🔒 Acesso Restrito")
+    st.markdown("Digite o PIN para acessar o sistema.")
+    
+    pin_input = st.text_input("PIN:", type="password", max_chars=4)
+    
+    if st.button("Entrar"):
+        try:
+            correct_pin = st.secrets["pin"]
+        except Exception:
+            correct_pin = "1979"  # Fallback para desenvolvimento local
+        
+        if pin_input == str(correct_pin):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("❌ PIN incorreto. Tente novamente.")
+    
+    return False
+
+if not check_pin():
+    st.stop()
 
 st.title("⚽ Cartola Analytics 2026 - Painel de Dados")
 
@@ -55,38 +86,52 @@ data_corte = st.sidebar.date_input("Data de Corte", pd.to_datetime("2026-12-31")
 
 # 4. Seleção de Arquivo Excel (Fonte de Dados)
 DEFAULT_PATH = os.path.join(BASE_DIR, "input", "Scouts_Reorganizado.xlsx")
+IS_LOCAL = os.path.exists(DEFAULT_PATH)
 
 # Opção de upload
 st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Fonte de Dados")
-use_upload = st.sidebar.checkbox("Usar planilha personalizada", value=False, 
-                                   help="Marque para fazer upload de uma planilha ao invés de usar a padrão")
 
-file_path = DEFAULT_PATH
+file_path = None
 uploaded_file = None
 
-if use_upload:
+if IS_LOCAL:
+    # Modo local: oferece escolha entre arquivo padrão ou upload
+    use_upload = st.sidebar.checkbox("Usar planilha personalizada", value=False, 
+                                       help="Marque para fazer upload de uma planilha ao invés de usar a padrão")
+    if use_upload:
+        uploaded_file = st.sidebar.file_uploader(
+            "Carregar Excel", 
+            type=["xlsx"],
+            help="Faça upload da planilha Scouts_Reorganizado.xlsx atualizada"
+        )
+        if uploaded_file is not None:
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+            tmp.write(uploaded_file.getbuffer())
+            tmp.close()
+            file_path = tmp.name
+            st.sidebar.success(f"✅ Planilha carregada: {uploaded_file.name}")
+        else:
+            st.sidebar.warning("⚠️ Aguardando upload...")
+    else:
+        file_path = DEFAULT_PATH
+        st.sidebar.info("📁 Usando planilha padrão")
+else:
+    # Modo nuvem: upload obrigatório
+    st.sidebar.info("☁️ Modo Online - Faça upload da planilha atualizada")
     uploaded_file = st.sidebar.file_uploader(
-        "Carregar Excel", 
+        "Carregar Scouts_Reorganizado.xlsx", 
         type=["xlsx"],
-        help="Faça upload da planilha Scouts_Reorganizado.xlsx atualizada"
+        help="Faça upload da planilha Scouts_Reorganizado.xlsx atualizada para esta rodada"
     )
     if uploaded_file is not None:
-        # Salvar temporariamente para usar com a engine
-        temp_path = os.path.join(os.path.dirname(DEFAULT_PATH), "temp_upload.xlsx")
-        with open(temp_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        file_path = temp_path
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+        tmp.write(uploaded_file.getbuffer())
+        tmp.close()
+        file_path = tmp.name
         st.sidebar.success(f"✅ Planilha carregada: {uploaded_file.name}")
     else:
-        st.sidebar.warning("⚠️ Aguardando upload...")
-        file_path = None
-else:
-    if os.path.exists(DEFAULT_PATH):
-        st.sidebar.info(f"📁 Usando planilha padrão")
-    else:
-        st.sidebar.error("❌ Planilha padrão não encontrada")
-        file_path = None
+        st.sidebar.warning("⚠️ Aguardando upload da planilha...")
 
 # Inicializar Engine
 # @st.cache_resource  # Temporariamente desabilitado para debug
