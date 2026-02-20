@@ -328,19 +328,89 @@ if "results_df" in st.session_state:
                     fig = None
                 
                 if fig:
-                    # Salvar em buffer
                     from io import BytesIO
-                    buf = BytesIO()
-                    # Aumentando DPI para 400 para garantir qualidade máxima
-                    fig.savefig(buf, format="png", dpi=600, bbox_inches='tight', facecolor='white')
-                    st.image(buf, caption=f"Tabela {current_pos} Gerada", width="stretch")
+                    from PIL import Image as PILImage
                     
-                    # Download PNG
+                    # === PASSO 1: Renderizar em alta resolução (DPI 600) ===
+                    buf_raw = BytesIO()
+                    fig.savefig(buf_raw, format="png", dpi=600, bbox_inches='tight', facecolor='white')
+                    buf_raw.seek(0)
+                    
+                    # === PASSO 2: Otimizar para compatibilidade iOS ===
+                    # iOS crasha com imagens > ~16.7 megapixels
+                    # Limite seguro: 4096px no lado maior, max ~12 MP
+                    MAX_SIDE = 4096
+                    MAX_MEGAPIXELS = 12.0
+                    
+                    img = PILImage.open(buf_raw)
+                    orig_w, orig_h = img.size
+                    orig_mp = (orig_w * orig_h) / 1_000_000
+                    
+                    needs_resize = False
+                    new_w, new_h = orig_w, orig_h
+                    
+                    # Verificar limite de pixels por lado
+                    if max(orig_w, orig_h) > MAX_SIDE:
+                        ratio = MAX_SIDE / max(orig_w, orig_h)
+                        new_w = int(orig_w * ratio)
+                        new_h = int(orig_h * ratio)
+                        needs_resize = True
+                    
+                    # Verificar limite de megapixels
+                    new_mp = (new_w * new_h) / 1_000_000
+                    if new_mp > MAX_MEGAPIXELS:
+                        ratio = (MAX_MEGAPIXELS / new_mp) ** 0.5
+                        new_w = int(new_w * ratio)
+                        new_h = int(new_h * ratio)
+                        needs_resize = True
+                    
+                    if needs_resize:
+                        img = img.resize((new_w, new_h), PILImage.Resampling.LANCZOS)
+                    
+                    # Salvar PNG otimizado
+                    buf = BytesIO()
+                    img.save(buf, format="PNG", optimize=True)
+                    buf.seek(0)
+                    
+                    final_size_mb = len(buf.getvalue()) / (1024 * 1024)
+                    
+                    # Se ainda > 5MB, converter para JPEG de alta qualidade
+                    if final_size_mb > 5.0:
+                        buf_jpg = BytesIO()
+                        if img.mode == 'RGBA':
+                            bg = PILImage.new('RGB', img.size, (255, 255, 255))
+                            bg.paste(img, mask=img.split()[3])
+                            img = bg
+                        img.save(buf_jpg, format="JPEG", quality=92, optimize=True)
+                        buf_jpg.seek(0)
+                        
+                        jpg_size_mb = len(buf_jpg.getvalue()) / (1024 * 1024)
+                        if jpg_size_mb < final_size_mb:
+                            buf = buf_jpg
+                            final_size_mb = jpg_size_mb
+                            file_ext = "jpg"
+                            mime_type = "image/jpeg"
+                        else:
+                            file_ext = "png"
+                            mime_type = "image/png"
+                    else:
+                        file_ext = "png"
+                        mime_type = "image/png"
+                    
+                    plt.close(fig)
+                    
+                    # Info para o usuário
+                    st.success(f"Imagem otimizada: {new_w}x{new_h}px ({final_size_mb:.1f} MB) - Compatível com iPhone")
+                    
+                    st.image(buf, caption=f"Tabela {current_pos} Gerada", width="stretch")
+                    buf.seek(0)
+                    
+                    # Download
                     st.download_button(
-                        label="Baixar Imagem PNG (Alta Resolução)",
+                        label=f"Baixar Imagem {file_ext.upper()} (Otimizada para Telegram)",
                         data=buf.getvalue(),
-                        file_name=f"tabela_{current_pos}_rodada_{rodada_alvo}.png",
-                        mime="image/png"
+                        file_name=f"tabela_{current_pos}_rodada_{rodada_alvo}.{file_ext}",
+                        mime=mime_type
                     )
             except Exception as e:
                 st.error(f"Erro ao gerar imagem: {e}")
