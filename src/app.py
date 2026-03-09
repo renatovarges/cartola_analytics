@@ -150,15 +150,15 @@ try:
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔄 Histórico de AF")
     
-    if st.sidebar.button("Processar Atualização de AF", help="Clique aqui apenas quando subir um arquivo NOVO com scouts atualizados."):
-        with st.sidebar.status("Processando AF...", expanded=True) as status:
-            msg = engine.process_af_update()
-            if "sucesso" in msg:
-                status.update(label="✅ Sucesso!", state="complete")
-                st.sidebar.success(msg)
-            else:
-                status.update(label="ℹ️ Info", state="complete")
-                st.sidebar.info(msg)
+    # Automate AF processing upon load
+    with st.sidebar.status("Processando AF Automaticamente...", expanded=True) as status:
+        msg = engine.process_af_update()
+        if "sucesso" in msg:
+            status.update(label="✅ AF Atualizado!", state="complete")
+            st.sidebar.success(msg)
+        else:
+            status.update(label="ℹ️ Info", state="complete")
+            st.sidebar.info(msg)
                 
 except Exception as e:
     st.error(f"Erro ao carregar engine: {e}")
