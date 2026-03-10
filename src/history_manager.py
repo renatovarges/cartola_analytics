@@ -228,20 +228,28 @@ def process_new_upload(df_scouts_new, df_pj_new):
                     "AF_VALOR": delta
                 })
             else:
-                # Caso raro: 2+ jogos novos -> dividir igualmente
+                # Caso raro: 2+ jogos novos -> distribuição INTEIRA
+                # AF é sempre inteiro na realidade. Usamos floor + remainder.
+                # Ex: delta=3, 2 jogos -> jogo mais antigo=1, jogo mais recente=2
                 n_games = len(player_new_matches)
-                af_per_game = delta / n_games
+                delta_int = int(round(delta))
+                base = delta_int // n_games
+                remainder = delta_int % n_games
+                sorted_matches = sorted(player_new_matches)
                 warnings.append(
-                    f"⚠️ {jogador} ({time}): delta={delta} dividido entre {n_games} jogos "
-                    f"({af_per_game:.1f}/jogo)"
+                    f"⚠️ {jogador} ({time}): delta={delta_int} distribuído entre {n_games} jogos "
+                    f"(base={base}, +1 nos {remainder} mais recentes)"
                 )
-                for match_id in sorted(player_new_matches):
-                    new_assignments.append({
-                        "MATCH_ID": match_id,
-                        "TIME": time,
-                        "JOGADOR": jogador,
-                        "AF_VALOR": round(af_per_game, 1)
-                    })
+                for i, match_id in enumerate(sorted_matches):
+                    # Os jogos mais recentes (últimos 'remainder') recebem +1
+                    af_val = base + (1 if i >= (n_games - remainder) else 0)
+                    if af_val > 0:  # Não registrar AF=0
+                        new_assignments.append({
+                            "MATCH_ID": match_id,
+                            "TIME": time,
+                            "JOGADOR": jogador,
+                            "AF_VALOR": af_val
+                        })
             continue
         
         # ---- PASSO B: Nenhum jogo novo -> buscar jogo ÓRFÃO (sem AF no banco) ----
@@ -266,19 +274,25 @@ def process_new_upload(df_scouts_new, df_pj_new):
                     f"ℹ️ {jogador} ({time}): delta={delta} atribuído a jogo órfão {match_id}"
                 )
             else:
+                # Distribuição INTEIRA para múltiplos jogos órfãos
                 n_games = len(player_orphan_matches)
-                af_per_game = delta / n_games
+                delta_int = int(round(delta))
+                base = delta_int // n_games
+                remainder = delta_int % n_games
+                sorted_orphans = sorted(player_orphan_matches)
                 warnings.append(
-                    f"⚠️ {jogador} ({time}): delta={delta} dividido entre {n_games} jogos órfãos "
-                    f"({af_per_game:.1f}/jogo)"
+                    f"⚠️ {jogador} ({time}): delta={delta_int} distribuído entre {n_games} jogos órfãos "
+                    f"(base={base}, +1 nos {remainder} mais recentes)"
                 )
-                for match_id in sorted(player_orphan_matches):
-                    new_assignments.append({
-                        "MATCH_ID": match_id,
-                        "TIME": time,
-                        "JOGADOR": jogador,
-                        "AF_VALOR": round(af_per_game, 1)
-                    })
+                for i, match_id in enumerate(sorted_orphans):
+                    af_val = base + (1 if i >= (n_games - remainder) else 0)
+                    if af_val > 0:
+                        new_assignments.append({
+                            "MATCH_ID": match_id,
+                            "TIME": time,
+                            "JOGADOR": jogador,
+                            "AF_VALOR": af_val
+                        })
             continue
         
         # ---- PASSO C: Fallback - buscar qualquer jogo novo do TIME ----
