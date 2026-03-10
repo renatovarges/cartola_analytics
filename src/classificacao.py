@@ -28,7 +28,7 @@ def load_meias_volantes_classification(csv_path=None):
     # Normalizar nomes para uppercase
     classificacao_dict = {}
     for _, row in df.iterrows():
-        jogador = str(row['JOGADOR']).strip().upper()
+        jogador = str(row['NOME']).strip().upper()
         classe = row['CLASSIFICACAO']
         if pd.notna(classe):
             classificacao_dict[jogador] = classe
