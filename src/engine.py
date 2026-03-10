@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import unicodedata
 from . import config, loader
 from .classificacao import load_meias_volantes_classification
 from .history_manager import load_af_database, process_new_upload, reset_history
@@ -96,7 +97,18 @@ class CartolaEngine:
 
         # 3. Filtro Meia vs Volante
         if mv_filter and self.classificacao_mv:
-            df["CLASSIFICACAO_MV"] = df["NOME"].str.upper().map(self.classificacao_mv)
+            def _classify(nome):
+                nome_upper = str(nome).strip().upper()
+                # Tentar match direto primeiro
+                result = self.classificacao_mv.get(nome_upper)
+                if result:
+                    return result
+                # Fallback: tentar sem acentos
+                nfkd = unicodedata.normalize('NFKD', nome_upper)
+                nome_norm = ''.join(c for c in nfkd if not unicodedata.combining(c))
+                return self.classificacao_mv.get(nome_norm)
+            
+            df["CLASSIFICACAO_MV"] = df["NOME"].apply(_classify)
             if mv_filter == "MEIA":
                 df = df[df["CLASSIFICACAO_MV"] == "MEIA"]
             elif mv_filter == "VOLANTE":
