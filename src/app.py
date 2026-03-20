@@ -1,15 +1,18 @@
 import streamlit as st
+import matplotlib
+matplotlib.use('Agg') # Modo servidor (sem GUI)
 import pandas as pd
 import sys
 import os
 import tempfile
 
+# Configuração OBRIGATÓRIA no início
+st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
+
 # Adiciona o diretório raiz ao sys.path para permitir "from src.engine ..."
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.engine import CartolaEngine
-
-st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
 
 # === PROTEÇÃO POR PIN ===
 def check_pin():
