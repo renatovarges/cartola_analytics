@@ -330,10 +330,13 @@ if "results_df" in st.session_state:
                 if fig:
                     from io import BytesIO
                     from PIL import Image as PILImage
+                    import gc
                     
-                    # === PASSO 1: Renderizar em alta resolução (DPI 600) ===
+                    # === PASSO 1: Renderizar (DPI já definido no renderer: 200) ===
                     buf_raw = BytesIO()
-                    fig.savefig(buf_raw, format="png", dpi=600, bbox_inches='tight', facecolor='white')
+                    fig.savefig(buf_raw, format="png", dpi=200, bbox_inches='tight', facecolor='white')
+                    plt.close(fig)
+                    gc.collect()
                     buf_raw.seek(0)
                     
                     # === PASSO 2: Otimizar para compatibilidade iOS ===
@@ -396,8 +399,6 @@ if "results_df" in st.session_state:
                     else:
                         file_ext = "png"
                         mime_type = "image/png"
-                    
-                    plt.close(fig)
                     
                     # Info para o usuário
                     st.success(f"Imagem otimizada: {new_w}x{new_h}px ({final_size_mb:.1f} MB) - Compatível com iPhone")

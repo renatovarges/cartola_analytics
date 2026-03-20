@@ -277,7 +277,7 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
     
     # Aumentar altura vertical se tiver legenda
     extra_h = 1.0 if exibir_legenda else 0
-    fig, ax = plt.subplots(figsize=(24, len(df) * 1.1 + 7 + extra_h), dpi=600)
+    fig, ax = plt.subplots(figsize=(24, len(df) * 1.1 + 7 + extra_h), dpi=200)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_axis_off()
@@ -724,7 +724,7 @@ def render_zagueiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TOD
     df = df_original.reset_index(drop=True)
     
     extra_h = 1.0 if exibir_legenda else 0
-    fig, ax = plt.subplots(figsize=(24, len(df) * 1.1 + 7 + extra_h), dpi=600) # Largura um pouco maior pra 5 colunas
+    fig, ax = plt.subplots(figsize=(24, len(df) * 1.1 + 7 + extra_h), dpi=200) # Largura um pouco maior pra 5 colunas
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_axis_off()
@@ -1073,7 +1073,7 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
     
     extra_h = 1.0 if exibir_legenda else 0
     # Tabela mais larga (12 cols por lado vs 10 antes) -> Aumentar width de 24 para 28
-    fig, ax = plt.subplots(figsize=(28, len(df) * 1.1 + 7 + extra_h), dpi=600)
+    fig, ax = plt.subplots(figsize=(28, len(df) * 1.1 + 7 + extra_h), dpi=200)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_axis_off()
@@ -1471,7 +1471,7 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
     extra_h = 1.0 if exibir_legenda else 0
     # Tabela MUITO larga (29 cols). Goleiros era 25 e width 28.
     # 29/25 * 28 ~ 32.5. Vamos usar width=34 para garantir.
-    fig, ax = plt.subplots(figsize=(34, len(df) * 1.1 + 7 + extra_h), dpi=600)
+    fig, ax = plt.subplots(figsize=(34, len(df) * 1.1 + 7 + extra_h), dpi=200)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_axis_off()
