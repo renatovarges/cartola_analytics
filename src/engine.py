@@ -504,24 +504,41 @@ class CartolaEngine:
         # Adversário é quem jogou NESSES matches mas NÃO é o time
         mask_opp_gk = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] != team) & (self.df_pj["POSICAO"].isin(config.POS_IDS["GOLEIRO"]))
         df_opp_gk = self.df_pj[mask_opp_gk]
-        
-        # DE (Defesa Dificil) ou DS? Config diz DE -> DEFESA_DIFICIL
-        # Vamos somar DE (que já foi carregada como DD no loader se mapeada)
-        # Se 'DE' não existir, tenta 'DD'
+
         col_de = "DE" if "DE" in df_opp_gk.columns else "DD"
         de_forcada = df_opp_gk[col_de].sum() if col_de in df_opp_gk.columns else 0
-        
+
         # 3. Jogos Sem Marcar (SG do Adversário)
-        # Quantidade de jogos onde o time fez 0 gols
-        # Agrupar por match para ver gols do time em cada jogo
         goals_per_match = df_team.groupby("MATCH_ID")["G"].sum()
         jogos_sem_marcar = (goals_per_match == 0).sum()
-        
+
+        # 4. % DE por jogo (media dos percentuais individuais)
+        # Spec: "É uma MÉDIA" - calcula % de cada jogo separadamente, depois tira a média
+        pct_per_game = []
+        col_de_global = "DE" if "DE" in self.df_pj.columns else "DD"
+        for mid in selected_matches:
+            opp_gk_m = self.df_pj[
+                (self.df_pj["MATCH_ID"] == mid) &
+                (self.df_pj["TIME"] != team) &
+                (self.df_pj["POSICAO"].isin(config.POS_IDS["GOLEIRO"]))
+            ]
+            team_m = self.df_pj[
+                (self.df_pj["MATCH_ID"] == mid) &
+                (self.df_pj["TIME"] == team)
+            ]
+            de_m = opp_gk_m[col_de_global].sum() if col_de_global in opp_gk_m.columns else 0
+            gols_m = team_m["G"].sum()
+            total_m = de_m + gols_m
+            if total_m > 0:
+                pct_per_game.append(de_m / total_m * 100.0)
+        pct_de_forcada = sum(pct_per_game) / len(pct_per_game) if pct_per_game else 0.0
+
         return {
             "CHUTES": chutes,
             "GOLS": gols,
             "DE_FORCADA": de_forcada,
-            "JOGOS_SEM_MARCAR": jogos_sem_marcar
+            "JOGOS_SEM_MARCAR": jogos_sem_marcar,
+            "PCT_DE_FORCADA": pct_de_forcada,
         }
 
     def get_team_defensive_stats(self, team, window_n, mando_filter=None):
@@ -547,31 +564,46 @@ class CartolaEngine:
         # 1. Stats do Goleiro/Defesa (Meu Time)
         mask_team_gk = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] == team) & (self.df_pj["POSICAO"].isin(config.POS_IDS["GOLEIRO"]))
         df_gk = self.df_pj[mask_team_gk]
-        
-        # DE (Defesas)
+
         col_de = "DE" if "DE" in df_gk.columns else "DD"
         de_feita = df_gk[col_de].sum() if col_de in df_gk.columns else 0
-        
-        # GS (Gols Sofridos) - As vezes GS está no goleiro, as vezes na zaga. Melhor pegar do Goleiro.
+
+        # GS (Gols Sofridos) - do próprio goleiro
         gs = df_gk["GS"].sum() if "GS" in df_gk.columns else 0
-        
+
         # SG (Saldo Gol) - Bônus do time. Pegar max por partida do time.
         mask_team = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] == team)
         df_team_all = self.df_pj[mask_team]
-        # Agrupa por match e pega max de SG (se alguem teve SG, o time teve)
         sg = df_team_all.groupby("MATCH_ID")["SG"].max().sum()
-        
+
         # 2. Chutes Sofridos (Soma chutes do Adversário)
         mask_opp = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] != team)
         df_opp = self.df_pj[mask_opp]
-        
         chutes_cedidos = df_opp["FD"].sum() + df_opp["G"].sum()
-        
+
+        # 3. % DE por jogo (media dos percentuais individuais)
+        # Spec: "É uma MÉDIA" - calcula % de cada jogo separadamente, depois tira a média
+        pct_per_game = []
+        col_de_global = "DE" if "DE" in self.df_pj.columns else "DD"
+        for mid in selected_matches:
+            gk_m = self.df_pj[
+                (self.df_pj["MATCH_ID"] == mid) &
+                (self.df_pj["TIME"] == team) &
+                (self.df_pj["POSICAO"].isin(config.POS_IDS["GOLEIRO"]))
+            ]
+            de_m = gk_m[col_de_global].sum() if col_de_global in gk_m.columns else 0
+            gs_m = gk_m["GS"].sum() if "GS" in gk_m.columns else 0
+            total_m = de_m + gs_m
+            if total_m > 0:
+                pct_per_game.append(de_m / total_m * 100.0)
+        pct_de = sum(pct_per_game) / len(pct_per_game) if pct_per_game else 0.0
+
         return {
             "CHUTES_CEDIDOS": chutes_cedidos,
             "GS": gs,
             "DE": de_feita,
-            "SG": sg
+            "SG": sg,
+            "PCT_DE": pct_de,
         }
 
     def generate_goleiros_table(self, mandante, visitante, window_n=5, date_cutoff=None, mando_mode="POR_MANDO", rodada_curr=None):
@@ -650,8 +682,8 @@ class CartolaEngine:
             "COC_SG": man_def["SG"],       
             "CDF_SG": vis_off["JOGOS_SEM_MARCAR"],
                          
-            "COC_PCT_DE": calc_pct(man_def["DE"], man_def["GS"]),
-            "CDF_PCT_DE": calc_pct(vis_off["DE_FORCADA"], vis_off["GOLS"]),
+            "COC_PCT_DE": man_def["PCT_DE"],
+            "CDF_PCT_DE": vis_off["PCT_DE_FORCADA"],
 
 
             # --- VISITANTE SIDE (Right Panel - Analisando Goleiro VISITANTE) ---
@@ -672,8 +704,8 @@ class CartolaEngine:
             "COF_SG": vis_def["SG"],           
             "CDC_SG": man_off["JOGOS_SEM_MARCAR"],
             
-            "COF_PCT_DE": calc_pct(vis_def["DE"], vis_def["GS"]),
-            "CDC_PCT_DE": calc_pct(man_off["DE_FORCADA"], man_off["GOLS"]),
+            "COF_PCT_DE": vis_def["PCT_DE"],
+            "CDC_PCT_DE": man_off["PCT_DE_FORCADA"],
         }
 
     # -------------------------------------------------------------------------
