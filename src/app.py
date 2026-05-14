@@ -39,7 +39,25 @@ from src.caption_atacantes import (
     generate_atacantes_caption_telegram_md,
     generate_atacantes_caption_html,
 )
-from src.clipboard_utils import copy_text_to_clipboard
+from src.clipboard_utils import copy_text_to_clipboard, render_web_copy_button
+
+# ---------------------------------------------------------------------------
+# Helper — exibe resultado do botão de copiar (Windows ou web)
+# ---------------------------------------------------------------------------
+def _show_copy_status(status: str, tg_text: str) -> None:
+    """Exibe feedback após tentativa de cópia.
+
+    - "ok"     → mensagem de sucesso (Windows/local)
+    - "server" → botão JavaScript para copiar no browser (Streamlit Cloud)
+    - outro    → aviso de erro genérico
+    """
+    if status == "ok":
+        st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
+    elif status == "server":
+        render_web_copy_button(tg_text)
+    elif status:
+        st.warning(f"⚠️ Não foi possível copiar: {status}")
+
 
 # === PROTEÇÃO POR PIN ===
 def check_pin():
@@ -529,11 +547,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
                     st.session_state["_legenda_mei_copy_status"] = _err
 
         with col_mei_msg:
-            _mei_status = st.session_state.get("_legenda_mei_copy_status", "")
-            if _mei_status == "ok":
-                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
-            elif _mei_status:
-                st.warning(f"⚠️ Não foi possível copiar: {_mei_status}")
+            _show_copy_status(st.session_state.get("_legenda_mei_copy_status", ""), caption_mei_tg)
 
         with st.expander("📄 Texto puro (alternativa manual)"):
             st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
@@ -579,11 +593,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
                     st.session_state["_legenda_atk_copy_status"] = _err
 
         with col_atk_msg:
-            _atk_status = st.session_state.get("_legenda_atk_copy_status", "")
-            if _atk_status == "ok":
-                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
-            elif _atk_status:
-                st.warning(f"⚠️ Não foi possível copiar: {_atk_status}")
+            _show_copy_status(st.session_state.get("_legenda_atk_copy_status", ""), caption_atk_tg)
 
         with st.expander("📄 Texto puro (alternativa manual)"):
             st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
@@ -653,11 +663,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
                     st.session_state["_legenda_copy_status"] = _err
 
         with col_msg:
-            _status = st.session_state.get("_legenda_copy_status", "")
-            if _status == "ok":
-                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
-            elif _status:
-                st.warning(f"⚠️ Não foi possível copiar: {_status}")
+            _show_copy_status(st.session_state.get("_legenda_copy_status", ""), caption_tg_md)
 
         # --- Fallback: texto puro sempre visível ---
         with st.expander("📄 Texto puro (alternativa manual)"):
@@ -724,11 +730,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
                     st.session_state["_legenda_lat_copy_status"] = _err
 
         with col_lat_msg:
-            _lat_status = st.session_state.get("_legenda_lat_copy_status", "")
-            if _lat_status == "ok":
-                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
-            elif _lat_status:
-                st.warning(f"⚠️ Não foi possível copiar: {_lat_status}")
+            _show_copy_status(st.session_state.get("_legenda_lat_copy_status", ""), caption_lat_tg)
 
         # --- Fallback: texto puro sempre visível ---
         with st.expander("📄 Texto puro (alternativa manual)"):
@@ -788,11 +790,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
                     st.session_state["_legenda_zag_copy_status"] = _err
 
         with col_zag_msg:
-            _zag_status = st.session_state.get("_legenda_zag_copy_status", "")
-            if _zag_status == "ok":
-                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
-            elif _zag_status:
-                st.warning(f"⚠️ Não foi possível copiar: {_zag_status}")
+            _show_copy_status(st.session_state.get("_legenda_zag_copy_status", ""), caption_zag_tg)
 
         # --- Fallback: texto puro sempre visível ---
         with st.expander("📄 Texto puro (alternativa manual)"):

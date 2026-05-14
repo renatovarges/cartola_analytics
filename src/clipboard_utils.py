@@ -21,11 +21,18 @@ Dependências: nenhuma além da stdlib.
 """
 
 import ctypes
-import ctypes.wintypes
 import os
+import platform
 import re
 import subprocess
 import tempfile
+
+# ---------------------------------------------------------------------------
+# Detecção de ambiente
+# ---------------------------------------------------------------------------
+
+def _is_windows() -> bool:
+    return platform.system() == "Windows"
 
 
 # ---------------------------------------------------------------------------
@@ -34,16 +41,17 @@ import tempfile
 
 def copy_text_to_clipboard(text: str) -> tuple:
     """
-    Copia texto puro para o clipboard do Windows via clip.exe.
+    Copia texto puro para o clipboard.
 
-    clip.exe é um utilitário nativo do Windows — sem dependências externas.
-    Aceita UTF-16 LE com BOM na stdin e coloca no clipboard como CF_UNICODETEXT.
+    - Windows local: usa clip.exe (nativo) com fallback para ctypes Win32.
+    - Linux / Streamlit Cloud: retorna (False, "server") — o chamador deve
+      renderizar o botão JavaScript via render_web_copy_button().
 
-    Telegram Desktop lê CF_UNICODETEXT ao colar. Se o texto contiver
-    marcadores **Telegram Markdown v1**, o negrito aparece ao enviar.
-
-    Retorna (True, "") em sucesso ou (False, mensagem_de_erro).
+    Retorna (True, "") em sucesso ou (False, código_de_erro).
     """
+    if not _is_windows():
+        return False, "server"
+
     try:
         # Python's encode('utf-16') inclui BOM automaticamente — clip.exe precisa disso
         encoded = text.encode("utf-16")
@@ -54,16 +62,55 @@ def copy_text_to_clipboard(text: str) -> tuple:
             timeout=5,
         )
         if result.returncode != 0:
-            # Tenta fallback via ctypes se clip.exe falhar
             return _copy_text_ctypes(text)
         return True, ""
     except FileNotFoundError:
-        # clip.exe não encontrado — usa ctypes como fallback
         return _copy_text_ctypes(text)
     except subprocess.TimeoutExpired:
         return False, "clip.exe demorou demais (timeout 5s)."
     except Exception as exc:
         return False, str(exc)
+
+
+# ---------------------------------------------------------------------------
+# Botão JavaScript para ambiente web (Streamlit Cloud)
+# ---------------------------------------------------------------------------
+
+def render_web_copy_button(text: str, label: str = "📋 Copiar para Telegram") -> None:
+    """
+    Renderiza um botão HTML/JS que copia `text` para o clipboard do BROWSER.
+
+    Funciona em qualquer ambiente web com HTTPS (ex: Streamlit Cloud).
+    Usa navigator.clipboard.writeText() — API nativa dos browsers modernos.
+    O texto é serializado via json.dumps() para escapar com segurança todos
+    os caracteres especiais (aspas, barras, emojis, quebras de linha etc.).
+    """
+    import json
+    import streamlit.components.v1 as components
+
+    text_json = json.dumps(text)   # escaping seguro para JS
+
+    html = f"""
+<button
+  id="webCopyBtn"
+  onclick="
+    navigator.clipboard.writeText({text_json})
+      .then(function() {{
+        document.getElementById('webCopyBtn').textContent = '✅ Copiado! Cole no Telegram.';
+        document.getElementById('webCopyBtn').style.background = '#155724';
+      }})
+      .catch(function(e) {{
+        document.getElementById('webCopyBtn').textContent = '❌ Erro: ' + e;
+      }});
+  "
+  style="
+    background:#1d6f42; color:white; border:none;
+    padding:8px 18px; border-radius:6px; cursor:pointer;
+    font-size:14px; font-weight:bold; margin:4px 0;
+  "
+>{label}</button>
+"""
+    components.html(html, height=50)
 
 
 def _copy_text_ctypes(text: str) -> tuple:
