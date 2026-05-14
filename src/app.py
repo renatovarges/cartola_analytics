@@ -39,7 +39,7 @@ from src.caption_atacantes import (
     generate_atacantes_caption_telegram_md,
     generate_atacantes_caption_html,
 )
-from src.clipboard_utils import copy_text_to_clipboard, render_web_copy_button
+from src.clipboard_utils import copy_text_to_clipboard
 
 # ---------------------------------------------------------------------------
 # Helper — exibe resultado do botão de copiar (Windows ou web)
@@ -48,13 +48,14 @@ def _show_copy_status(status: str, tg_text: str) -> None:
     """Exibe feedback após tentativa de cópia.
 
     - "ok"     → mensagem de sucesso (Windows/local)
-    - "server" → botão JavaScript para copiar no browser (Streamlit Cloud)
+    - "server" → exibe texto em st.code() — botão 📋 nativo do Streamlit
     - outro    → aviso de erro genérico
     """
     if status == "ok":
         st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
     elif status == "server":
-        render_web_copy_button(tg_text)
+        st.caption("Clique em 📋 (canto superior direito do bloco) para copiar:")
+        st.code(tg_text, language=None)
     elif status:
         st.warning(f"⚠️ Não foi possível copiar: {status}")
 
