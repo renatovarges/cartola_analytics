@@ -1,3 +1,4 @@
+import math
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
@@ -9,6 +10,7 @@ from . import mapping
 
 # --- CONFIGURAÇÃO VISUAL (PADRÃO TCC) ---
 import matplotlib.patheffects as path_effects
+import matplotlib.colors as mcolors
 
 COLOR_TCC_GREEN = "#227759"
 COLOR_TCC_GREEN_DARK = "#185540" # Faixa superior (Top)
@@ -25,6 +27,58 @@ COLOR_BOM   = "#95D5B2"
 COLOR_MEDIA = "#D8F3DC"
 COLOR_CLARO = "#D8F3DC"
 COLOR_DEFAULT = "white"
+
+# === LABELS DOS SUBTÍTULOS (substituem COC/CDF/COF/CDC visualmente) ===
+PREFIX_LABELS = {
+    "COC": "CONQ.\nPELO\nMANDANTE",
+    "CDF": "CEDIDO\nPELO\nVISITANTE",
+    "COF": "CONQ.\nPELO\nVISITANTE",
+    "CDC": "CEDIDO\nPELO\nMANDANTE",
+}
+
+# === TEXTO VISUAL DOS PERFIS DE GOLEIRO ===
+# Texto exibido na tabela (interno continua SG+DE/SG/DE/BOMB/-)
+PERFIL_DISPLAY = {
+    "SG+DE": "SG+\nDEFESAS",
+    "SG":    "SG",
+    "DE":    "DEFESAS",
+    "BOMB":  "ALTO\nRISCO",
+    "-":     "—",
+}
+
+# Cores neutras (sem verde) para as células de PERFIL
+PERFIL_BG_COLORS = {
+    "SG+DE": "#93C5FD",  # azul claro evidente  (blue-300) — mais completo
+    "SG":    "#DBEAFE",  # azul muito claro (blue-100)
+    "DE":    "#E5E7EB",  # cinza azulado neutro — mais discreto que SG+DE
+    "BOMB":  "#FECACA",  # vermelho/salmão claro (red-200)
+    "-":     "#F3F4F6",  # cinza muito claro
+}
+
+# Grafite para o cabeçalho PERFIL
+COLOR_PERFIL_HEADER = "#374151"
+
+# === PREMIUM GRADIENT COLORS (top=claro → bottom=escuro) ===
+GRAD_PRESSAO   = ("#64B5F6", "#0D47A1")   # azul claro  → azul profundo
+GRAD_RISCO     = ("#E57373", "#B71C1C")   # vermelho claro → vermelho escuro
+GRAD_POTENCIAL = ("#FFB74D", "#BF360C")   # laranja claro  → laranja profundo
+GRAD_PERFIS    = ("#90A4AE", "#263238")   # cinza azulado  → grafite escuro
+GRAD_SCOUTS    = ("#43A047", "#1A3E22")   # verde médio    → verde escuro premium
+
+
+def draw_gradient_rect(ax, x, y, w, h, color_top, color_bottom, n_steps=20, zorder=100):
+    """Retângulo com gradiente vertical (topo claro → base escura) usando N tiras."""
+    c1 = np.array(mcolors.to_rgb(color_top))    # topo
+    c2 = np.array(mcolors.to_rgb(color_bottom))  # base
+    step_h = h / n_steps
+    for i in range(n_steps):
+        t = i / max(n_steps - 1, 1)  # 0 = base, 1 = topo
+        c = c2 * (1.0 - t) + c1 * t
+        ax.add_patch(patches.Rectangle(
+            (x, y + i * step_h), w, step_h + 0.0002,
+            facecolor=tuple(np.clip(c, 0, 1)), edgecolor="none",
+            transform=ax.transAxes, zorder=zorder
+        ))
 
 # === HELPER UNIFICADO SG ===
 def get_sg_color(val, n_jogos):
@@ -63,6 +117,49 @@ def get_sg_color(val, n_jogos):
         
     return COLOR_ROW_ODD, "black"
 
+
+def get_sg_color_zag(val, n_jogos):
+    """SG exclusivo para zagueiros.
+
+    Regras (proporcional à janela):
+      - verde escuro se val == n_jogos  (SG em todos os jogos)
+      - verde claro  se val / n_jogos >= 2/3
+      - branco nos demais casos
+    Sem verde médio.
+
+    Exemplos:
+      n=3: 0/1 → branco | 2 → claro | 3 → escuro
+      n=4: 0/1/2 → branco | 3 → claro | 4 → escuro
+      n=5: 0/1/2/3 → branco | 4 → claro | 5 → escuro
+    """
+    TXT = "black"
+    if n_jogos <= 0:
+        return COLOR_DEFAULT, TXT
+    if val >= n_jogos:
+        return COLOR_ELITE, "white"
+    if val / n_jogos >= (2.0 / 3.0):
+        return COLOR_MEDIA, TXT
+    return COLOR_DEFAULT, TXT
+
+
+def get_sg_color_laterais(val, n_jogos):
+    """SG exclusivo para laterais — mais restritivo que goleiros.
+
+    Janela 3: 0-1 → branco  |  2 → verde claro  |  3 → verde escuro
+    Escala proporcional para outras janelas (limiar claro = 2/3 × n_jogos).
+    Não usa verde médio nesta posição.
+    """
+    TXT = "black"
+    lim_elite = float(n_jogos)          # 3 para janela=3
+    lim_claro = (2.0 / 3.0) * n_jogos  # 2 para janela=3
+
+    if val >= lim_elite:
+        return COLOR_ELITE, "white"
+    if val >= lim_claro:
+        return COLOR_MEDIA, TXT
+    return COLOR_DEFAULT, TXT
+
+
 def get_color_for_value(col_name, value, n_jogos, position_type="MEIAS"):
     if value <= 0: return COLOR_ROW_ODD, "black" # Sem destaque
     
@@ -76,78 +173,98 @@ def get_color_for_value(col_name, value, n_jogos, position_type="MEIAS"):
     
     if "AF" in col_name:
         if position_type == "ATACANTES":
-            lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
+            # Passe fin. é pré-scout para atacantes — limiar mais exigente
+            lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
         else:
             lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
     elif "CHUTES" in col_name:
         if position_type == "ATACANTES":
-            lim_elite, lim_bom, lim_media = 6.0, 5.0, 3.0
+            # Atacantes exigem volume alto de finalização — limiar elevado
+            lim_elite, lim_bom, lim_media = 7.0, 6.0, 5.0
         else:
             lim_elite, lim_bom, lim_media = 5.0, 4.0, 3.0
     elif "PG" in col_name:
         lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
     elif "BASICA" in col_name:
-        lim_elite, lim_bom, lim_media = 3.5, 2.5, 1.5
+        # Meias e Atacantes: piso claro em 2.0
+        lim_elite, lim_bom, lim_media = 3.5, 2.5, 2.0
         is_avg = True
     else:
         return COLOR_ROW_ODD, "black"
         
     # 2. Escalar Limites pelo N (apenas se for Soma)
     factor = 1.0 if is_avg else float(n_jogos)
-    
+
     t_elite = lim_elite * factor
     t_bom   = lim_bom * factor
     t_media = lim_media * factor
-    
+
     # 3. Comparar Val >= Threshold
-    if value >= t_elite:
-        # Elite: Fundo verde escuro premium
+    # Para médias (BASICA), arredonda para 1 casa decimal para evitar
+    # falsos negativos por imprecisão de ponto flutuante
+    # (ex: 2.6999...97 exibido como 2,7 mas falhando >= 2.7)
+    cmp = float(f"{float(value):.1f}") if is_avg else value
+
+    if cmp >= t_elite:
         return COLOR_ELITE, "white"
-    elif value >= t_bom:
-        # Bom: Verde médio (#95D5B2)
-        return COLOR_BOM, "#081C15" 
-    elif value >= t_media:
-            # Acima da Média: Verde claro (#D8F3DC)
+    elif cmp >= t_bom:
+        return COLOR_BOM, "#081C15"
+    elif cmp >= t_media:
         return COLOR_MEDIA, "#081C15"
-        
+
     return COLOR_ROW_ODD, "black"
 
 def get_color_zag(col_name, value, n_jogos):
-    if value <= 0: return COLOR_ROW_ODD, "black"
-    
-    # 1. Regra Especial para SG (Depende de N)
-    if "SG" in col_name:
-        return get_sg_color(value, n_jogos)
+    """Coloração exclusiva para a tabela de ZAGUEIROS.
 
-    # 2. Regras Por Jogo (DE, CHUTES, PTS)
-    is_avg = False
-    lim_elite, lim_bom, lim_media = 999, 999, 999
-    
+    SG      → get_sg_color_zag() (exclusivo — não usa get_sg_color global)
+    DE      → escala com n_jogos: 2×n claro | 3×n médio | 4×n escuro (inalterada)
+    CHUTES  → proporcional (FINALIZ.): ceil(2/3×n) claro | ceil(4/3×n) médio | ceil(5/3×n) escuro
+    PTS     → absoluto (MÉD. PTS): <3.0 branco | 3.0 claro | 4.5 médio | 6.0 escuro
+    BASICA  → absoluto (MÉD. BÁSICA): <1.8 branco | 1.8 claro | 2.2 médio | 2.6 escuro
+    """
+    TXT = "black"
+
+    if value <= 0:
+        return COLOR_ROW_ODD, TXT
+
+    # 1. SG — regra específica para zagueiros (não usa get_sg_color global)
+    if "SG" in col_name:
+        return get_sg_color_zag(value, n_jogos)
+
+    # 2. DE — Desarmes, escala com n_jogos (mantida intacta)
     if "DE" in col_name:
-            # Sugestão: 4, 3, 2 (User Request)
-            lim_elite, lim_bom, lim_media = 4.0, 3.0, 2.0
-            is_avg = False
-    elif "CHUTES" in col_name:
-            # Sugestão: 3.0, 2.0, 1.0 (Manter)
-            lim_elite, lim_bom, lim_media = 3.0, 2.0, 1.0
-            is_avg = False
-    elif "PTS" in col_name:
-            # Sugestão: 7.0, 5.0, 4.0
-            lim_elite, lim_bom, lim_media = 7.0, 5.0, 4.0
-            is_avg = True
-    elif "BASICA" in col_name:
-            # Mantendo padrão Meias para Básica (Exceto Media = 2.0)
-            lim_elite, lim_bom, lim_media = 3.5, 2.5, 2.0
-            is_avg = True
-    else:
-        return COLOR_ROW_ODD, "black"
-        
-    factor = 1.0 if is_avg else float(n_jogos)
-    
-    if value >= lim_elite * factor: return COLOR_ELITE, "white"
-    elif value >= lim_bom * factor : return COLOR_BOM, "#081C15"
-    elif value >= lim_media * factor: return COLOR_MEDIA, "#081C15"
-    return COLOR_ROW_ODD, "black"
+        f = float(n_jogos)
+        if   value >= 4.0 * f: return COLOR_ELITE, "white"
+        elif value >= 3.0 * f: return COLOR_BOM,   TXT
+        elif value >= 2.0 * f: return COLOR_MEDIA,  TXT
+        return COLOR_ROW_ODD, TXT
+
+    # 3. CHUTES / FINALIZ. — limiar proporcional à janela
+    if "CHUTES" in col_name:
+        lim_claro = math.ceil((2.0 / 3.0) * n_jogos)
+        lim_bom   = math.ceil((4.0 / 3.0) * n_jogos)
+        lim_elite = math.ceil((5.0 / 3.0) * n_jogos)
+        if   value >= lim_elite: return COLOR_ELITE, "white"
+        elif value >= lim_bom:   return COLOR_BOM,   TXT
+        elif value >= lim_claro: return COLOR_MEDIA,  TXT
+        return COLOR_ROW_ODD, TXT
+
+    # 4. PTS / MÉD. PTS — média por jogo (valor absoluto)
+    if "PTS" in col_name:
+        if   value >= 6.0: return COLOR_ELITE, "white"
+        elif value >= 4.5: return COLOR_BOM,   TXT
+        elif value >= 3.0: return COLOR_MEDIA,  TXT
+        return COLOR_ROW_ODD, TXT
+
+    # 5. BASICA / MÉD. BÁSICA — média por jogo (valor absoluto)
+    if "BASICA" in col_name:
+        if   value >= 2.6: return COLOR_ELITE, "white"
+        elif value >= 2.2: return COLOR_BOM,   TXT
+        elif value >= 1.8: return COLOR_MEDIA,  TXT
+        return COLOR_ROW_ODD, TXT
+
+    return COLOR_ROW_ODD, TXT
 
 def get_color_gol(col_name, value, n_jogos):
     TXT_BLACK = "black"
@@ -207,37 +324,235 @@ def get_color_gol(col_name, value, n_jogos):
     # 6. SG (Clean Sheets)
     elif "SG" in col_name:
         return get_sg_color(val, n_jogos)
-        
+
     return COLOR_DEFAULT, TXT_BLACK
 
+
+def get_color_gol_pct_de(value, pressao_index):
+    """
+    Regra de cor exclusiva para % DEFESAS na tabela de goleiros.
+    A cor só aparece quando há TANTO bom percentual QUANTO pressão suficiente.
+      Sem cor  : %DEF < 70  OU  pressao < 12
+      Claro    : %DEF >= 70 E pressao >= 12 E pressao < 15
+      Médio    : %DEF >= 70 E pressao >= 15 E pressao < 18
+      Escuro   : %DEF >= 70 E pressao >= 18
+    """
+    TXT_BLACK = "black"
+    try:
+        pct = float(value)
+    except (TypeError, ValueError):
+        return COLOR_DEFAULT, TXT_BLACK
+
+    try:
+        pressao = float(pressao_index)
+    except (TypeError, ValueError):
+        pressao = 0.0
+
+    if pct < 70.0 or pressao < 12.0:
+        return COLOR_DEFAULT, TXT_BLACK
+
+    if pressao >= 18.0:
+        return COLOR_ELITE, TXT_BLACK
+    elif pressao >= 15.0:
+        return COLOR_BOM, TXT_BLACK
+    else:  # >= 12
+        return COLOR_CLARO, TXT_BLACK
+
+
+def get_color_gol_gols(value):
+    """
+    Regra de cor exclusiva para GOLS na tabela de goleiros.
+      0      → verde claro (favorável ao goleiro)
+      1 a 4  → branco (neutro)
+      >= 5   → vermelho claro (risco relevante)
+    """
+    TXT_BLACK = "black"
+    try:
+        val = float(value)
+    except (TypeError, ValueError):
+        return COLOR_DEFAULT, TXT_BLACK
+
+    if val == 0:
+        return "#C8E6C9", TXT_BLACK   # verde claro discreto
+    elif val >= 5:
+        return "#FECACA", TXT_BLACK   # vermelho claro / salmão
+    else:
+        return COLOR_DEFAULT, TXT_BLACK  # branco (1–4)
+
+
+def get_color_gol_chutes_ag(value, risco_index, chute_pm_cruzado):
+    """
+    Cor para CHUTE A GOL na tabela de goleiros.
+    Prioridade: vermelho primeiro (contexto de ameaça sobrepõe verde).
+      Vermelho forte : val>=15 E (risco>=5 OU pm<3)
+      Vermelho claro : val>=12 E (risco>=5 OU pm<3)
+      Verde forte    : val>=15 E risco<5 E pm>=5
+      Verde claro    : val>=12 E risco<5 E pm>=4
+      Branco         : demais casos
+    """
+    TXT_BLACK = "black"
+    try:
+        val   = float(value)
+        risco = float(risco_index)
+        pm    = float(chute_pm_cruzado)
+    except (TypeError, ValueError):
+        return COLOR_DEFAULT, TXT_BLACK
+
+    ameaca = risco >= 5 or pm < 3
+
+    if val >= 15 and ameaca:
+        return "#FCA5A5", TXT_BLACK   # vermelho forte
+    if val >= 12 and ameaca:
+        return "#FECACA", TXT_BLACK   # vermelho claro
+    if val >= 15 and not ameaca and pm >= 5:
+        return "#81C784", TXT_BLACK   # verde forte
+    if val >= 12 and not ameaca and pm >= 4:
+        return "#C8E6C9", TXT_BLACK   # verde claro
+    return COLOR_DEFAULT, TXT_BLACK
+
+
+def get_color_gol_chutes_pm(value, pressao_index, risco_index):
+    """
+    Cor para CHUTE P/ MARCAR na tabela de goleiros.
+    Prioridade: vermelho primeiro.
+      Vermelho forte : val<3 E (pressao>=15 OU risco>=5)
+      Vermelho claro : val<3 E pressao>=12
+      Verde forte    : val>=5 E pressao>=15 E risco<5
+      Verde claro    : val>=4 E pressao>=12 E risco<5
+      Branco         : demais casos
+    """
+    TXT_BLACK = "black"
+    try:
+        val     = float(value)
+        pressao = float(pressao_index)
+        risco   = float(risco_index)
+    except (TypeError, ValueError):
+        return COLOR_DEFAULT, TXT_BLACK
+
+    if val < 3 and (pressao >= 15 or risco >= 5):
+        return "#FCA5A5", TXT_BLACK   # vermelho forte
+    if val < 3 and pressao >= 12:
+        return "#FECACA", TXT_BLACK   # vermelho claro
+    if val >= 5 and pressao >= 15 and risco < 5:
+        return "#81C784", TXT_BLACK   # verde forte
+    if val >= 4 and pressao >= 12 and risco < 5:
+        return "#C8E6C9", TXT_BLACK   # verde claro
+    return COLOR_DEFAULT, TXT_BLACK
+
+
+def get_color_gol_defesas(value, risco_index):
+    """
+    Cor para DEFESAS na tabela de goleiros. Apenas verde ou branco — nunca vermelho.
+
+    Regras (limiar elevado para ser mais seletivo):
+      val < 8                          → branco
+      val >= 8 e < 11 e risco < 5     → verde claro  (#C8E6C9)
+      val >= 11 e risco < 5           → verde forte   (#81C784)
+      val >= 11 e risco >= 5          → verde claro   (#C8E6C9)  (risco alto limita)
+      val >= 8 e < 11 e risco >= 5    → branco
+    """
+    TXT_BLACK = "black"
+    try:
+        val   = float(value)
+        risco = float(risco_index)
+    except (TypeError, ValueError):
+        return COLOR_DEFAULT, TXT_BLACK
+
+    if val >= 11 and risco < 5:
+        return "#81C784", TXT_BLACK   # verde forte
+    if val >= 11 and risco >= 5:
+        return "#C8E6C9", TXT_BLACK   # verde claro (risco alto limita destaque)
+    if val >= 8 and risco < 5:
+        return "#C8E6C9", TXT_BLACK   # verde claro
+    return COLOR_DEFAULT, TXT_BLACK   # branco (val<8, ou val 8-10 com risco>=5)
+
+
+def get_color_gol_sg(value, risco_index):
+    """
+    Cor para SG na tabela de goleiros. Apenas verde ou branco.
+      Verde forte : val>=2 E risco<5
+      Verde claro : val>=1 E risco<5
+      Verde claro : val>=2 E risco>=5  (risco alto limita a verde claro)
+      Branco      : demais casos (incluindo val=0)
+    """
+    TXT_BLACK = "black"
+    try:
+        val   = float(value)
+        risco = float(risco_index)
+    except (TypeError, ValueError):
+        return COLOR_DEFAULT, TXT_BLACK
+
+    if val >= 2 and risco < 5:
+        return "#81C784", TXT_BLACK   # verde forte
+    if val >= 1 and risco < 5:
+        return "#C8E6C9", TXT_BLACK   # verde claro
+    if val >= 2 and risco >= 5:
+        return "#C8E6C9", TXT_BLACK   # verde claro (risco alto limita destaque)
+    return COLOR_DEFAULT, TXT_BLACK
+
+
+def get_color_perfil_gol(perfil):
+    """Cor de fundo para as células de PERFIL do goleiro (sem verde)."""
+    return PERFIL_BG_COLORS.get(perfil, "#F3F4F6")
+
+
 def get_color_lat(col_name, value, n_jogos):
+    """Coloração exclusiva para a tabela de LATERAIS.
+
+    Regras calibradas para janela de 3 jogos (escalam proporcionalmente):
+
+    DESARMES (_DE):
+        ≥ 10/3 × n_jogos → verde escuro   (≥10 em janela=3)
+        ≥  8/3 × n_jogos → verde médio    (≥ 8 em janela=3)
+        ≥  2.0 × n_jogos → verde claro    (≥ 6 em janela=3)
+        abaixo           → branco
+
+    G + A (_PG):
+        ≥ 3 → verde escuro
+        ≥ 2 → verde médio
+        ≥ 1 → verde claro
+        0   → branco
+
+    MÉD. BÁSICA (_BAS):
+        ≥ 4.0 → verde escuro
+        ≥ 3.5 → verde médio
+        ≥ 2.5 → verde claro
+        < 2.5 → branco
+
+    SG (_SG):  via get_sg_color_laterais()
+        0-1   → branco
+        ≥ 2   → verde claro  (≥ 2/3 × n_jogos)
+        ≥ n   → verde escuro (todos os jogos)
+    """
     TXT = "black"
-    
-    try: val = float(value)
-    except: return COLOR_DEFAULT, TXT
-    
-    # logica preliminar (User vai refinar)
-    # DE (Desarmes)
+
+    try:
+        val = float(value)
+    except (TypeError, ValueError):
+        return COLOR_DEFAULT, TXT
+
+    # DE — Desarmes
     if "_DE" in col_name and "PCT" not in col_name:
-        # 4 por jogo (Elite), 3 (Bom), 2 (Médio)
-        if val >= 4.0 * n_jogos: return COLOR_ELITE, TXT
-        elif val >= 3.0 * n_jogos: return COLOR_BOM, TXT
-        elif val >= 2.0 * n_jogos: return COLOR_MEDIA, TXT
-        
-    # PG (Gols + Ass)
+        if   val >= (10.0 / 3.0) * n_jogos: return COLOR_ELITE, TXT
+        elif val >= ( 8.0 / 3.0) * n_jogos: return COLOR_BOM,   TXT
+        elif val >= ( 6.0 / 3.0) * n_jogos: return COLOR_MEDIA, TXT
+
+    # PG — Gols + Assistências
     elif "_PG" in col_name:
-        if val >= 1: return COLOR_ELITE, TXT # 1 gol/ass é mto bom p lateral
-        
-    # BAS (Basica)
+        if   val >= 3: return COLOR_ELITE, TXT
+        elif val >= 2: return COLOR_BOM,   TXT
+        elif val >= 1: return COLOR_MEDIA, TXT
+
+    # BAS — Média Básica
     elif "_BAS" in col_name:
-            if val >= 4.0: return COLOR_ELITE, TXT
-            elif val >= 3.0: return COLOR_BOM, TXT
-            elif val >= 2.0: return COLOR_MEDIA, TXT
-            
-    # SG
+        if   val >= 4.0: return COLOR_ELITE, TXT
+        elif val >= 3.5: return COLOR_BOM,   TXT
+        elif val >= 2.5: return COLOR_MEDIA, TXT
+
+    # SG — regra específica para laterais (não usa get_sg_color global)
     elif "_SG" in col_name:
-            return get_sg_color(val, n_jogos)
-            
+        return get_sg_color_laterais(val, n_jogos)
+
     return COLOR_DEFAULT, TXT
 
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets")
@@ -339,15 +654,15 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
     super_header_h = 0.04
     
     groups = [
-        ("ASS. FIN.", 0, 2),
-        ("CHUTES", 2, 4),
-        ("P.G.", 4, 6),
-        ("M. BÁSICA", 6, 8),
+        ("PASSE FIN.", 0, 2),
+        ("FINALIZ.", 2, 4),
+        ("G + A", 4, 6),
+        ("MÉD. BÁSICA", 6, 8),
         ("MANDO", 8, 9),
-        ("ASS. FIN.", 9, 11),
-        ("CHUTES", 11, 13),
-        ("P.G.", 13, 15),
-        ("M. BÁSICA", 15, 17),
+        ("PASSE FIN.", 9, 11),
+        ("FINALIZ.", 11, 13),
+        ("G + A", 13, 15),
+        ("MÉD. BÁSICA", 15, 17),
     ]
     
     for label, start_idx, end_idx in groups:
@@ -357,22 +672,31 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
         edge_color = "white" if start_idx % 2 == 0 and start_idx > 0 else "none"
         edge_width = 2 if edge_color == "white" else 0
         
-        rect = patches.Rectangle(
-            (x_start, super_header_y), width, super_header_h,
-            facecolor=COLOR_TCC_GREEN, edgecolor=edge_color, linewidth=edge_width,
-            transform=ax.transAxes, zorder=100
-        )
-        ax.add_patch(rect)
-        
+        if label != "MANDO":
+            draw_gradient_rect(ax, x_start, super_header_y, width, super_header_h,
+                               GRAD_SCOUTS[0], GRAD_SCOUTS[1], zorder=100)
+        else:
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor=COLOR_TCC_GREEN, edgecolor="none", linewidth=0,
+                transform=ax.transAxes, zorder=100
+            ))
+        if edge_color != "none":
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor="none", edgecolor=edge_color, linewidth=edge_width,
+                transform=ax.transAxes, zorder=103
+            ))
+
         ax.text(x_start + width/2, super_header_y + super_header_h/2, label,
-                ha="center", va="center", color="white", weight="bold", 
-                fontsize=13, transform=ax.transAxes, zorder=101)
-    
+                ha="center", va="center", color="white", weight="bold",
+                fontsize=13, transform=ax.transAxes, zorder=104)
+
     # === SUB HEADERS - COLADO ===
-    sub_header_y = super_header_y - super_header_h  # COLADO
-    sub_header_h = 0.04
+    sub_header_y = super_header_y - super_header_h - 0.02  # deslocado para dar altura ao texto duplo
+    sub_header_h = 0.062
     COLOR_CINZA = "#E5E7EB"
-    
+
     curr_x = start_x
     for i, col in enumerate(all_cols):
         if col == "MANDO":
@@ -381,8 +705,8 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
         else:
             prefix = col.split("_")[0]
             bg_color = COLOR_TCC_PINK if prefix in ["COC", "COF"] else COLOR_CINZA
-            label = prefix
-        
+            label = PREFIX_LABELS.get(prefix, prefix)
+
         # Desenhar retângulo SEM BORDAS
         rect = patches.Rectangle(
             (curr_x, sub_header_y), col_widths[i], sub_header_h,
@@ -390,12 +714,14 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
             transform=ax.transAxes, zorder=50
         )
         ax.add_patch(rect)
-        
+
         ax.text(curr_x + col_widths[i]/2, sub_header_y + sub_header_h/2, label,
                 ha="center", va="center", color="black", weight="bold",
-                fontsize=8 if col == "MANDO" else 13, transform=ax.transAxes, zorder=52)
+                fontsize=8 if col == "MANDO" else 7.0, family="DejaVu Sans",
+                multialignment="center", linespacing=1.6,
+                transform=ax.transAxes, zorder=52)
         curr_x += col_widths[i]
-    
+
     # BORDAS DO SUB_HEADER: linhas manuais
     # Top do sub_header
     ax.plot([start_x, start_x + sum(col_widths)], [sub_header_y + sub_header_h, sub_header_y + sub_header_h],
@@ -447,8 +773,8 @@ def render_meias_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS",
                 cell_color = COLOR_TCC_GREEN
                 text_color = "white"
             else:
-                # Usar nova função de cor
-                cell_color, text_color = get_color_for_value(col, val, window_n)
+                # Usar nova função de cor (passa position_type para BASICA meias vs. atacantes)
+                cell_color, text_color = get_color_for_value(col, val, window_n, position_type)
                 # Se não tem cor de destaque, usa a cor da linha (zebrada)
                 if cell_color == COLOR_ROW_ODD:
                     cell_color = row_color
@@ -820,23 +1146,23 @@ def render_zagueiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TOD
     # 17,18 = PTS
     # 19,20 = BASICA
     groups = [
-        ("S.G.", 0, 2),
+        ("SG", 0, 2),
         ("DESARMES", 2, 4),
-        ("CHUTES", 4, 6),
-        ("PONTOS", 6, 8),
-        ("M. BÁSICA", 8, 10),
+        ("FINALIZ.", 4, 6),
+        ("MÉD. PTS", 6, 8),
+        ("MÉD. BÁSICA", 8, 10),
         ("MANDO", 10, 11),
-        ("S.G.", 11, 13),
+        ("SG", 11, 13),
         ("DESARMES", 13, 15),
-        ("CHUTES", 15, 17),
-        ("PONTOS", 17, 19),
-        ("M. BÁSICA", 19, 21),
+        ("FINALIZ.", 15, 17),
+        ("MÉD. PTS", 17, 19),
+        ("MÉD. BÁSICA", 19, 21),
     ]
-    
+
     for label, start_idx, end_idx in groups:
         x_start = start_x + sum(col_widths[:start_idx])
         width = sum(col_widths[start_idx:end_idx])
-        
+
         # Borda branca entre headers (exceto o primeiro e Mando)
         edge_color = "white" if start_idx > 0 and start_idx != 10 else "none"
         edge_width = 2
@@ -845,21 +1171,30 @@ def render_zagueiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TOD
         if start_idx > 10:
              edge_color = "white"
 
-        rect = patches.Rectangle(
-            (x_start, super_header_y), width, super_header_h,
-            facecolor=COLOR_TCC_GREEN, edgecolor=edge_color, linewidth=edge_width,
-            transform=ax.transAxes, zorder=100
-        )
-        ax.add_patch(rect)
+        if label != "MANDO":
+            draw_gradient_rect(ax, x_start, super_header_y, width, super_header_h,
+                               GRAD_SCOUTS[0], GRAD_SCOUTS[1], zorder=100)
+        else:
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor=COLOR_TCC_GREEN, edgecolor="none", linewidth=0,
+                transform=ax.transAxes, zorder=100
+            ))
+        if edge_color != "none":
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor="none", edgecolor=edge_color, linewidth=edge_width,
+                transform=ax.transAxes, zorder=103
+            ))
         ax.text(x_start + width/2, super_header_y + super_header_h/2, label,
-                ha="center", va="center", color="white", weight="bold", 
-                fontsize=11, transform=ax.transAxes, zorder=101)
+                ha="center", va="center", color="white", weight="bold",
+                fontsize=11, transform=ax.transAxes, zorder=104)
 
     # === SUB HEADERS ===
-    sub_header_y = super_header_y - super_header_h
-    sub_header_h = 0.04
+    sub_header_y = super_header_y - super_header_h - 0.02
+    sub_header_h = 0.062
     COLOR_CINZA = "#E5E7EB"
-    
+
     curr_x = start_x
     for i, col in enumerate(all_cols):
         if col == "MANDO":
@@ -868,18 +1203,20 @@ def render_zagueiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TOD
         else:
             prefix = col.split("_")[0]
             bg_color = COLOR_TCC_PINK if prefix in ["COC", "COF"] else COLOR_CINZA
-            label = prefix
-            
+            label = PREFIX_LABELS.get(prefix, prefix)
+
         rect = patches.Rectangle(
             (curr_x, sub_header_y), col_widths[i], sub_header_h,
             facecolor=bg_color, edgecolor="none", linewidth=0,
             transform=ax.transAxes, zorder=50
         )
         ax.add_patch(rect)
-        
+
         ax.text(curr_x + col_widths[i]/2, sub_header_y + sub_header_h/2, label,
                 ha="center", va="center", color="black", weight="bold",
-                fontsize=8 if col == "MANDO" else 11, transform=ax.transAxes, zorder=52)
+                fontsize=8 if col == "MANDO" else 7.0, family="DejaVu Sans",
+                multialignment="center", linespacing=1.6,
+                transform=ax.transAxes, zorder=52)
         curr_x += col_widths[i]
 
     # Bordas Sub Header
@@ -1067,7 +1404,7 @@ def render_zagueiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TOD
 # === GOLEIROS RENDERER ===
 def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODOS", exibir_legenda=False):
     """
-    Renderiza tabela de GOLEIROS (Ameaças vs Oportunidades) 
+    Renderiza tabela de GOLEIROS (Pressão / Risco / Potencial)
     """
     df = df_original.reset_index(drop=True)
     
@@ -1117,33 +1454,35 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
             ha="center", va="center", fontsize=12, color="black", 
             weight="bold", transform=ax.transAxes, zorder=100)
             
-    # === ESTRUTURA DA TABELA GOLEIROS (CORRIGIDO: AMEACAS = ADV / OPORT = TIME) ===
-    # Left: Ameaças [COF/CDC] | Oport [COC/CDF]
+    # === ESTRUTURA DA TABELA GOLEIROS (Pressão / Risco / Potencial + PERFIL) ===
+    # Left : Pressão [COF/CDC] | Risco [COF/CDC] | Potencial [COC/CDF]
+    # Center: PERFIL_MANDANTE | MANDO | PERFIL_VISITANTE
+    # Right : Potencial [COF/CDC] | Risco [COF/CDC] | Pressão [COC/CDF]
     cols_left = [
-        "COF_CHUTES_AG", "CDC_CHUTES_AG", 
-        "COF_CHUTES_PM", "CDC_CHUTES_PM",
-        "COF_GOLS", "CDC_GOLS",
-        "COC_DE", "CDF_DE",
-        "COC_SG", "CDF_SG",
-        "COC_PCT_DE", "CDF_PCT_DE"
+        "COF_CHUTES_AG", "CDC_CHUTES_AG",    # idx  0-1  PRESSÃO
+        "COF_CHUTES_PM", "CDC_CHUTES_PM",    # idx  2-3
+        "COF_GOLS", "CDC_GOLS",              # idx  4-5  RISCO
+        "COC_DE", "CDF_DE",                  # idx  6-7  POTENCIAL
+        "COC_PCT_DE", "CDF_PCT_DE",          # idx  8-9
+        "COC_SG", "CDF_SG",                  # idx 10-11
     ]
-    cols_center = ["MANDO"]
+    cols_center = ["PERFIL_MANDANTE", "MANDO", "PERFIL_VISITANTE"]  # idx 12, 13, 14
     cols_right = [
-        "COC_CHUTES_AG", "CDF_CHUTES_AG",
-        "COC_CHUTES_PM", "CDF_CHUTES_PM",
-        "COC_GOLS", "CDF_GOLS",
-        "COF_DE", "CDC_DE",
-        "COF_SG", "CDC_SG",
-        "COF_PCT_DE", "CDC_PCT_DE"
+        "COC_CHUTES_AG", "CDF_CHUTES_AG",    # idx 15-16 PRESSÃO
+        "COC_CHUTES_PM", "CDF_CHUTES_PM",    # idx 17-18
+        "COC_GOLS", "CDF_GOLS",              # idx 19-20 RISCO
+        "COF_DE", "CDC_DE",                  # idx 21-22 POTENCIAL
+        "COF_PCT_DE", "CDC_PCT_DE",          # idx 23-24
+        "COF_SG", "CDC_SG",                  # idx 25-26
     ]
-                  
+
     all_cols = cols_left + cols_center + cols_right
 
-    # Ajuste de larguras (12 blocos de dados de cada lado)
-    # Total W ideal ~0.9. 24 colunas de dados + 1 centro.
-    # 24 * 0.035 = 0.84. Centro 0.10. Total 0.94. Fits.
-    col_w = 0.035
-    col_widths = [col_w] * 12 + [0.10] + [col_w] * 12
+    # Larguras: 24 colunas de dados (0.032 cada) + 2 PERFIL (0.055 cada) + MANDO (0.10)
+    # Total = 24*0.032 + 2*0.055 + 0.10 = 0.768 + 0.110 + 0.10 = 0.978 → cabe.
+    col_w    = 0.032   # dados
+    perfil_w = 0.055   # PERFIL: largo o suficiente para "SG+ DEFESAS" / "ALTO RISCO"
+    col_widths = [col_w] * 12 + [perfil_w] + [0.10] + [perfil_w] + [col_w] * 12
     
     # Calcular start_x para centralizar
     total_w = sum(col_widths)
@@ -1156,25 +1495,34 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
     
     # Grupos Lógicos
     # Indices:
-    # 0-6 (3 métricas x 2) = AMEAÇAS
-    # 6-12 (3 métricas x 2) = OPORTUNIDADES
+    # 0-3  (2 métricas x 2) = PRESSÃO   (CHUTE A GOL, CHUTE P/ MARCAR)
+    # 4-5  (1 métrica  x 2) = RISCO     (GOLS)
+    # 6-11 (3 métricas x 2) = POTENCIAL (DEFESAS, SG, % DEFESAS)
     # 12 = MANDO
-    # 13-19 = AMEAÇAS (Right)
-    # 19-25 = OPORTUNIDADES (Right)
+    # 13-16 = PRESSÃO (Right)
+    # 17-18 = RISCO (Right)
+    # 19-24 = POTENCIAL (Right)
     
-    # Mas precisamos de Labels individuais para Sub-headers (CHUT.AG, etc)
-    # Vamos desenhar PRIMEIRAMENTE os blocões de AMEAÇAS/OPORTUNIDADES (Azul e Laranja na imagem do user)
-    # User Image: Left Side -> AMEAÇAS (Blue) | OPORTUNIDADES (Orange). Right Side -> same.
-    
-    # Cores Headers Topo
-    COLOR_AMEACAS = "#90CAF9" # Azul claro
-    COLOR_OPORT   = "#FFCC80" # Laranja claro
-    
+    # Cores Headers Topo (mantidas como chaves do mapa de gradiente)
+    COLOR_PRESSAO   = "#90CAF9"
+    COLOR_RISCO     = "#EF9A9A"
+    COLOR_POTENCIAL = "#FFCC80"
+    _GRAD_GOL = {
+        COLOR_PRESSAO:   GRAD_PRESSAO,
+        COLOR_RISCO:     GRAD_RISCO,
+        COLOR_POTENCIAL: GRAD_POTENCIAL,
+    }
+
     top_groups = [
-        ("AMEAÇAS", 0, 6, COLOR_AMEACAS),
-        ("OPORTUNIDADES", 6, 12, COLOR_OPORT),
-        ("AMEAÇAS", 13, 19, COLOR_AMEACAS),
-        ("OPORTUNIDADES", 19, 25, COLOR_OPORT)
+        # Lado esquerdo (idx 0-11 = dados, idx 12 = PERFIL_MAN → sem bloco topo)
+        ("PRESSÃO",    0,  4, COLOR_PRESSAO),    # CHUTE A GOL + CHUTE P/ MARCAR
+        ("RISCO",      4,  6, COLOR_RISCO),       # GOLS
+        ("POTENCIAL",  6, 12, COLOR_POTENCIAL),   # DEFESAS + % DEFESAS + SG
+        # idx 12 PERFIL_MAN, idx 13 MANDO, idx 14 PERFIL_VIS → sem bloco topo (zona central)
+        # Lado direito (idx 15-26 = dados, +2 em relação ao layout anterior)
+        ("PRESSÃO",   15, 19, COLOR_PRESSAO),
+        ("RISCO",     19, 21, COLOR_RISCO),
+        ("POTENCIAL", 21, 27, COLOR_POTENCIAL),
     ]
     
     # Desenhar Top Level Headers
@@ -1185,90 +1533,115 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
         x_start = start_x + sum(col_widths[:start_idx])
         width = sum(col_widths[start_idx:end_idx])
         
-        rect = patches.Rectangle(
+        grad = _GRAD_GOL.get(color, (color, color))
+        draw_gradient_rect(ax, x_start, top_header_y, width, top_header_h,
+                           grad[0], grad[1], zorder=100)
+        ax.add_patch(patches.Rectangle(
             (x_start, top_header_y), width, top_header_h,
-            facecolor=color, edgecolor="white", linewidth=1,
-            transform=ax.transAxes, zorder=100
-        )
-        ax.add_patch(rect)
-        
-        # Sombra Manual Clean (Sem contorno grosso)
-        ax.text(x_start + width/2 + 0.001, top_header_y + top_header_h/2 - 0.001, label,
-                ha="center", va="center", color="black", weight="bold", alpha=0.25,
-                fontsize=13, transform=ax.transAxes, zorder=101)
+            facecolor="none", edgecolor="white", linewidth=1,
+            transform=ax.transAxes, zorder=102
+        ))
+        ax.text(x_start + width/2, top_header_y + top_header_h/2, label,
+                ha="center", va="center", color="white", weight="bold",
+                fontsize=13, transform=ax.transAxes, zorder=103)
 
-        # Texto Principal
-        txt_header = ax.text(x_start + width/2, top_header_y + top_header_h/2, label,
-                ha="center", va="center", color="white", weight="bold", 
-                fontsize=13, transform=ax.transAxes, zorder=102)
-                
     # === SUB HEADERS (Verdes: CHUT.AG, CHUT.PM...) ===
     # Agora sim os headers verdes padrão
     
     sub_groups = [
-        ("CHUT. AG", 0, 2),
-        ("CHUT. PM", 2, 4),
-        ("GOLS", 4, 6),
-        ("DE", 6, 8),
-        ("SG", 8, 10),
-        ("% DE", 10, 12),
-        
-        ("MANDO", 12, 13),
-        
-        ("CHUT. AG", 13, 15),
-        ("CHUT. PM", 15, 17),
-        ("GOLS", 17, 19),
-        ("DE", 19, 21),
-        ("SG", 21, 23),
-        ("% DE", 23, 25),
+        # Lado esquerdo
+        ("CHUTE A GOL",     0,  2),
+        ("CHUTE P/ MARCAR", 2,  4),
+        ("GOLS",            4,  6),
+        ("DEFESAS",         6,  8),
+        ("% DEFESAS",       8, 10),
+        ("SG",             10, 12),
+        # Centro
+        ("PERFIL",         12, 13),   # cabeçalho PERFIL mandante
+        ("MANDO",          13, 14),
+        ("PERFIL",         14, 15),   # cabeçalho PERFIL visitante
+        # Lado direito (shift +2)
+        ("CHUTE A GOL",    15, 17),
+        ("CHUTE P/ MARCAR",17, 19),
+        ("GOLS",           19, 21),
+        ("DEFESAS",        21, 23),
+        ("% DEFESAS",      23, 25),
+        ("SG",             25, 27),
     ]
     
     for label, start_idx, end_idx in sub_groups:
         x_start = start_x + sum(col_widths[:start_idx])
         width = sum(col_widths[start_idx:end_idx])
-        
-        edge_color = "white"
-        
-        rect = patches.Rectangle(
-            (x_start, super_header_y), width, super_header_h,
-            facecolor=COLOR_TCC_GREEN, edgecolor=edge_color, linewidth=1,
-            transform=ax.transAxes, zorder=100
-        )
-        ax.add_patch(rect)
+
+        # Cabeçalho PERFIL em grafite; demais em verde padrão
+        if label == "PERFIL":
+            subh_bg = COLOR_PERFIL_HEADER
+        else:
+            subh_bg = COLOR_TCC_GREEN
+
+        if label == "MANDO":
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor=COLOR_TCC_GREEN, edgecolor="none", linewidth=0,
+                transform=ax.transAxes, zorder=100
+            ))
+        elif label == "PERFIL":
+            draw_gradient_rect(ax, x_start, super_header_y, width, super_header_h,
+                               GRAD_PERFIS[0], GRAD_PERFIS[1], zorder=100)
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor="none", edgecolor="white", linewidth=1,
+                transform=ax.transAxes, zorder=102
+            ))
+        else:
+            draw_gradient_rect(ax, x_start, super_header_y, width, super_header_h,
+                               GRAD_SCOUTS[0], GRAD_SCOUTS[1], zorder=100)
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor="none", edgecolor="white", linewidth=1,
+                transform=ax.transAxes, zorder=102
+            ))
         ax.text(x_start + width/2, super_header_y + super_header_h/2, label,
-                ha="center", va="center", color="white", weight="bold", 
-                fontsize=11.5, transform=ax.transAxes, zorder=101) # Aumentado 11->11.5
+                ha="center", va="center", color="white", weight="bold",
+                fontsize=9, transform=ax.transAxes, zorder=103)
 
     # === DATA LABELS (COC/CDF/COF/CDC) ===
-    data_labels_h = 0.04
+    data_labels_h = 0.062
     data_labels_y = super_header_y - data_labels_h
     COLOR_CINZA = "#E5E7EB"
-    
+
     curr_x = start_x
     for i, col in enumerate(all_cols):
         if col == "MANDO":
             bg_color = "white"
             label = "CASA • FORA"
             fsize = 9.5
+        elif col in ("PERFIL_MANDANTE", "PERFIL_VISITANTE"):
+            # Coluna PERFIL: texto interpretativo no lugar do COC/CDF
+            bg_color = "#F3F4F6"  # cinza muito claro
+            label = "INDICADO\nPARA"
+            fsize = 10.0
         else:
             prefix = col.split("_")[0] # COC, CDF, COF, CDC
             if prefix in ["COC", "COF"]:
                 bg_color = COLOR_TCC_PINK
             else:
                 bg_color = COLOR_CINZA
-            label = prefix
-            fsize = 10.5
-            
+            label = PREFIX_LABELS.get(prefix, prefix)
+            fsize = 7.0
+
         rect = patches.Rectangle(
             (curr_x, data_labels_y), col_widths[i], data_labels_h,
             facecolor=bg_color, edgecolor="none", linewidth=0,
             transform=ax.transAxes, zorder=50
         )
         ax.add_patch(rect)
-        
+
         ax.text(curr_x + col_widths[i]/2, data_labels_y + data_labels_h/2, label,
                 ha="center", va="center", color="black", weight="bold",
-                fontsize=fsize, transform=ax.transAxes, zorder=52)
+                fontsize=fsize, family="DejaVu Sans",
+                multialignment="center", linespacing=1.6,
+                transform=ax.transAxes, zorder=52)
         curr_x += col_widths[i]
 
     # Bordas Linha Labels
@@ -1291,10 +1664,12 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
         curr_y -= row_h
         curr_x = start_x
         row_color = "white" # REMOVIDO ZEBRADO: Sempre Branco
-        
+
         for i, col in enumerate(all_cols):
-            val = df.iloc[idx][col] if col != "MANDO" else None
-            
+            # MANDO e PERFIL não são numéricos — lidos dentro de cada bloco
+            _skip_val = col in ("MANDO", "PERFIL_MANDANTE", "PERFIL_VISITANTE")
+            val = None if _skip_val else df.iloc[idx][col]
+
             if col == "MANDO":
                 # MANDO CELL (Same as V2)
                 cell_color = COLOR_TCC_GREEN
@@ -1378,6 +1753,36 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
                 logo_f = load_team_image(team_fora)
                 if logo_f: add_image(ax, logo_f, x_fora, y_fora, zoom=zoom_casa, zorder=200)
 
+            elif col in ("PERFIL_MANDANTE", "PERFIL_VISITANTE"):
+                # === PERFIL CELL ===
+                perfil_val = str(df.iloc[idx].get(col, "-")) if col in df.columns else "-"
+                if perfil_val in ("nan", "None", ""):
+                    perfil_val = "-"
+                bg_c = get_color_perfil_gol(perfil_val)
+                display_txt = PERFIL_DISPLAY.get(perfil_val, perfil_val)
+
+                # Fundo
+                rect = patches.Rectangle((curr_x, curr_y), col_widths[i], row_h,
+                    facecolor=bg_c, edgecolor="none", linewidth=0,
+                    transform=ax.transAxes, zorder=10)
+                ax.add_patch(rect)
+
+                # Bordas laterais mais marcadas (selo interpretativo)
+                ax.plot([curr_x, curr_x], [curr_y, curr_y + row_h],
+                        color=COLOR_PERFIL_HEADER, linewidth=1.5,
+                        transform=ax.transAxes, zorder=20)
+                ax.plot([curr_x + col_widths[i], curr_x + col_widths[i]],
+                        [curr_y, curr_y + row_h],
+                        color=COLOR_PERFIL_HEADER, linewidth=1.5,
+                        transform=ax.transAxes, zorder=20)
+
+                # Texto (2 linhas para SG+DEFESAS e ALTO RISCO, 1 linha para o resto)
+                ax.text(curr_x + col_widths[i]/2, curr_y + row_h/2, display_txt,
+                       ha="center", va="center", color="#1E293B", weight="bold",
+                       fontsize=11, family="DejaVu Sans",
+                       multialignment="center", linespacing=1.4,
+                       transform=ax.transAxes, zorder=15)
+
             else:
                 # DADOS CELL
                 if "PM" in col: fmt = "{:.1f}"
@@ -1387,10 +1792,74 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
                 else: fmt = "{:.1f}"
                 
                 txt = fmt.format(val)
-                
-                # Cor (Placeholder Function)
-                bg_c, txt_c = get_color_gol(col, val, window_n)
-                
+
+                # Cor — PCT_DE usa regra contextual (pressão + percentual)
+                if "PCT_DE" in col:
+                    row_data = df.iloc[idx]
+                    def _safe(k):
+                        try: return float(row_data.get(k, 0) or 0)
+                        except (TypeError, ValueError): return 0.0
+                    if col in ("COC_PCT_DE", "CDF_PCT_DE"):
+                        # Goleiro MANDANTE: pressão vem dos chutes do visitante
+                        pressao = (_safe("COF_CHUTES_AG") + _safe("CDC_CHUTES_AG")) / 2
+                    else:
+                        # Goleiro VISITANTE: pressão vem dos chutes do mandante
+                        pressao = (_safe("COC_CHUTES_AG") + _safe("CDF_CHUTES_AG")) / 2
+                    bg_c, txt_c = get_color_gol_pct_de(val, pressao)
+                elif "GOLS" in col:
+                    # GOLS: 0=verde, 1-4=branco, >=5=vermelho
+                    bg_c, txt_c = get_color_gol_gols(val)
+                elif "CHUTES_AG" in col:
+                    # CHUTE A GOL: contextual (risco + pm cruzado)
+                    row_data = df.iloc[idx]
+                    def _safe_ag(k):
+                        try: return float(row_data.get(k, 0) or 0)
+                        except (TypeError, ValueError): return 0.0
+                    if col in ("COF_CHUTES_AG", "CDC_CHUTES_AG"):
+                        risco_ctx = (_safe_ag("COF_GOLS")     + _safe_ag("CDC_GOLS"))     / 2
+                        pm_ctx    = (_safe_ag("COF_CHUTES_PM") + _safe_ag("CDC_CHUTES_PM")) / 2
+                    else:
+                        risco_ctx = (_safe_ag("COC_GOLS")     + _safe_ag("CDF_GOLS"))     / 2
+                        pm_ctx    = (_safe_ag("COC_CHUTES_PM") + _safe_ag("CDF_CHUTES_PM")) / 2
+                    bg_c, txt_c = get_color_gol_chutes_ag(val, risco_ctx, pm_ctx)
+                elif "CHUTES_PM" in col:
+                    # CHUTE P/ MARCAR: contextual (pressao + risco)
+                    row_data = df.iloc[idx]
+                    def _safe_pm(k):
+                        try: return float(row_data.get(k, 0) or 0)
+                        except (TypeError, ValueError): return 0.0
+                    if col in ("COF_CHUTES_PM", "CDC_CHUTES_PM"):
+                        pressao_ctx = (_safe_pm("COF_CHUTES_AG") + _safe_pm("CDC_CHUTES_AG")) / 2
+                        risco_ctx   = (_safe_pm("COF_GOLS")      + _safe_pm("CDC_GOLS"))      / 2
+                    else:
+                        pressao_ctx = (_safe_pm("COC_CHUTES_AG") + _safe_pm("CDF_CHUTES_AG")) / 2
+                        risco_ctx   = (_safe_pm("COC_GOLS")      + _safe_pm("CDF_GOLS"))      / 2
+                    bg_c, txt_c = get_color_gol_chutes_pm(val, pressao_ctx, risco_ctx)
+                elif "PCT" not in col and "_DE" in col:
+                    # DEFESAS: verde ou branco contextual (risco do lado)
+                    row_data = df.iloc[idx]
+                    def _safe_de(k):
+                        try: return float(row_data.get(k, 0) or 0)
+                        except (TypeError, ValueError): return 0.0
+                    if col in ("COC_DE", "CDF_DE"):   # mandante
+                        risco_ctx = (_safe_de("COF_GOLS") + _safe_de("CDC_GOLS")) / 2
+                    else:                              # visitante
+                        risco_ctx = (_safe_de("COC_GOLS") + _safe_de("CDF_GOLS")) / 2
+                    bg_c, txt_c = get_color_gol_defesas(val, risco_ctx)
+                elif "_SG" in col:
+                    # SG: verde ou branco contextual (risco do lado)
+                    row_data = df.iloc[idx]
+                    def _safe_sg(k):
+                        try: return float(row_data.get(k, 0) or 0)
+                        except (TypeError, ValueError): return 0.0
+                    if col in ("COC_SG", "CDF_SG"):   # mandante
+                        risco_ctx = (_safe_sg("COF_GOLS") + _safe_sg("CDC_GOLS")) / 2
+                    else:                              # visitante
+                        risco_ctx = (_safe_sg("COC_GOLS") + _safe_sg("CDF_GOLS")) / 2
+                    bg_c, txt_c = get_color_gol_sg(val, risco_ctx)
+                else:
+                    bg_c, txt_c = get_color_gol(col, val, window_n)
+
                 # Alternar linha
                 if bg_c == COLOR_ROW_ODD or bg_c == COLOR_ROW_EVEN:
                    bg_c = row_color
@@ -1423,12 +1892,24 @@ def render_goleiros_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
     # Right -> 10.
     # Indices: 2, 4, 6, 8, 10, 11, 12, 14, 16, 18, 20, 22
     
-    gol_vert_indices = [2, 4, 6, 8, 10, 12, 13, 15, 17, 19, 21, 23]
-    
+    # Separadores verticais: limites de grupo (inclui PERFIL em 12, 13, 14, 15)
+    gol_vert_indices = [2, 4, 6, 8, 10, 12, 13, 14, 15, 17, 19, 21, 23, 25]
+
     for i in gol_vert_indices:
         x_pos = start_x + sum(col_widths[:i])
         ax.plot([x_pos, x_pos], [data_labels_y, curr_y],
                color='black', linewidth=0.5, transform=ax.transAxes, zorder=202)
+
+    # Bordas grafite mais fortes nas laterais das colunas PERFIL (selo interpretativo)
+    for perfil_start_idx, perfil_end_idx in [(12, 13), (14, 15)]:
+        x_left  = start_x + sum(col_widths[:perfil_start_idx])
+        x_right = start_x + sum(col_widths[:perfil_end_idx])
+        ax.plot([x_left,  x_left],  [super_header_y, curr_y],
+                color=COLOR_PERFIL_HEADER, linewidth=2.0,
+                transform=ax.transAxes, zorder=203)
+        ax.plot([x_right, x_right], [super_header_y, curr_y],
+                color=COLOR_PERFIL_HEADER, linewidth=2.0,
+                transform=ax.transAxes, zorder=203)
     
     border_y_top = top_header_y + top_header_h # Top absoluto
     total_height = border_y_top - curr_y
@@ -1552,10 +2033,15 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
     super_header_y = 0.79
     super_header_h = 0.05
     
-    # Cores Grupos
+    # Cores Grupos — mapeadas para gradientes premium
     C_LE_TOP = "#4FC3F7" # Azul LE
     C_LD_TOP = "#FFB74D" # Laranja LD
     C_SG_TOP = "#81C784" # Verde SG
+    _GRAD_LAT = {
+        C_LE_TOP: GRAD_PRESSAO,
+        C_LD_TOP: GRAD_POTENCIAL,
+        C_SG_TOP: GRAD_SCOUTS,
+    }
     
     # Grupos Topo
     # Indices relativos ao inicio
@@ -1579,22 +2065,17 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
         x_start = start_x + sum(col_widths[:start_idx])
         width = sum(col_widths[start_idx:end_idx])
         
-        rect = patches.Rectangle(
+        grad = _GRAD_LAT.get(color, (color, color))
+        draw_gradient_rect(ax, x_start, top_header_y, width, top_header_h,
+                           grad[0], grad[1], zorder=100)
+        ax.add_patch(patches.Rectangle(
             (x_start, top_header_y), width, top_header_h,
-            facecolor=color, edgecolor="white", linewidth=1,
-            transform=ax.transAxes, zorder=100
-        )
-        ax.add_patch(rect)
-        
-        # Sombra removida por feedback do usuário
-        # ax.text(x_start + width/2 + 0.0003, top_header_y + top_header_h/2 - 0.0003, label,
-        #         ha="center", va="center", color="black", weight="bold", alpha=0.15,
-        #         fontsize=13, transform=ax.transAxes, zorder=101)
-                
-        # Texto
+            facecolor="none", edgecolor="white", linewidth=1,
+            transform=ax.transAxes, zorder=102
+        ))
         ax.text(x_start + width/2, top_header_y + top_header_h/2, label,
-                ha="center", va="center", color="white", weight="bold", 
-                fontsize=15, transform=ax.transAxes, zorder=102)
+                ha="center", va="center", color="white", weight="bold",
+                fontsize=15, transform=ax.transAxes, zorder=103)
 
     # === SUB HEADERS (Verdes: DE, PG, BAS...) ===
     # Left: [DE, DE] [PG, PG] [BAS, BAS] ...
@@ -1602,48 +2083,56 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
     
     sub_groups = [
         # Left LE
-        ("DESARMES", 0, 2), ("G + A", 2, 4), ("M. BÁSICA", 4, 6),
+        ("DESARMES", 0, 2), ("G + A", 2, 4), ("MÉD. BÁSICA", 4, 6),
         # Left LD
-        ("DESARMES", 6, 8), ("G + A", 8, 10), ("M. BÁSICA", 10, 12),
+        ("DESARMES", 6, 8), ("G + A", 8, 10), ("MÉD. BÁSICA", 10, 12),
         # Left SG
         ("SG", 12, 14),
-        
+
         ("MANDO", 14, 15),
-        
+
         # Right SG
         ("SG", 15, 17),
         # Right LD (Reverse: MED, PG, DE)
-        ("M. BÁSICA", 17, 19), ("G + A", 19, 21), ("DESARMES", 21, 23),
+        ("MÉD. BÁSICA", 17, 19), ("G + A", 19, 21), ("DESARMES", 21, 23),
         # Right LE (Reverse: MED, PG, DE)
-        ("M. BÁSICA", 23, 25), ("G + A", 25, 27), ("DESARMES", 27, 29),
+        ("MÉD. BÁSICA", 23, 25), ("G + A", 25, 27), ("DESARMES", 27, 29),
     ]
     
     for label, start_idx, end_idx in sub_groups:
         x_start = start_x + sum(col_widths[:start_idx])
         width = sum(col_widths[start_idx:end_idx])
         
-        rect = patches.Rectangle(
-            (x_start, super_header_y), width, super_header_h,
-            facecolor=COLOR_TCC_GREEN, edgecolor="white", linewidth=1,
-            transform=ax.transAxes, zorder=100
-        )
-        ax.add_patch(rect)
+        if label != "MANDO":
+            draw_gradient_rect(ax, x_start, super_header_y, width, super_header_h,
+                               GRAD_SCOUTS[0], GRAD_SCOUTS[1], zorder=100)
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor="none", edgecolor="white", linewidth=1,
+                transform=ax.transAxes, zorder=102
+            ))
+        else:
+            ax.add_patch(patches.Rectangle(
+                (x_start, super_header_y), width, super_header_h,
+                facecolor=COLOR_TCC_GREEN, edgecolor="none", linewidth=0,
+                transform=ax.transAxes, zorder=100
+            ))
         ax.text(x_start + width/2, super_header_y + super_header_h/2, label,
-                ha="center", va="center", color="white", weight="bold", 
-                fontsize=12.5, transform=ax.transAxes, zorder=101) # Fonte menor p/ caber
+                ha="center", va="center", color="white", weight="bold",
+                fontsize=12.5, transform=ax.transAxes, zorder=103)
 
     # === DATA LABELS (COC/CDF...) ===
-    data_labels_h = 0.04
+    data_labels_h = 0.062
     data_labels_y = super_header_y - data_labels_h
     COLOR_CINZA = "#E5E7EB"
-    
+
     curr_x = start_x
     for i, col in enumerate(all_cols):
         if col == "MANDO":
             # Label especial MANDO (CASA . FORA)
             label = "CASA • FORA"
             bg_color = "white"
-            fsize=9
+            fsize = 9
         else:
             # Prefix Logic
             prefix = col.split("_")[0] # COC, CDF, COF, CDC
@@ -1651,9 +2140,9 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
                 bg_color = COLOR_TCC_PINK
             else:
                 bg_color = COLOR_CINZA
-            label = prefix
-            fsize=12
-            
+            label = PREFIX_LABELS.get(prefix, prefix)
+            fsize = 7.0
+
         rect = patches.Rectangle(
             (curr_x, data_labels_y), col_widths[i], data_labels_h,
             facecolor=bg_color, edgecolor="none", linewidth=0,
@@ -1662,7 +2151,9 @@ def render_laterais_table(df_original, rodada_num, window_n=5, tipo_filtro="TODO
         ax.add_patch(rect)
         ax.text(curr_x + col_widths[i]/2, data_labels_y + data_labels_h/2, label,
                 ha="center", va="center", color="black", weight="bold",
-                fontsize=fsize, transform=ax.transAxes, zorder=52)
+                fontsize=fsize, family="DejaVu Sans",
+                multialignment="center", linespacing=1.6,
+                transform=ax.transAxes, zorder=52)
         curr_x += col_widths[i]
 
     # Bordas Labels

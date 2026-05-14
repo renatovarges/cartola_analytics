@@ -13,6 +13,33 @@ st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.engine import CartolaEngine
+from src.caption_goleiros import (
+    generate_goalkeeper_caption,
+    generate_goalkeeper_caption_plain,
+    generate_goalkeeper_caption_for_clipboard,
+    generate_goalkeeper_caption_telegram_md,
+)
+from src.caption_laterais import (
+    generate_laterais_caption_plain,
+    generate_laterais_caption_telegram_md,
+    generate_laterais_caption_html as generate_laterais_caption_html,
+)
+from src.caption_zagueiros import (
+    generate_zagueiros_caption_plain,
+    generate_zagueiros_caption_telegram_md,
+    generate_zagueiros_caption_html,
+)
+from src.caption_meias import (
+    generate_meias_caption_plain,
+    generate_meias_caption_telegram_md,
+    generate_meias_caption_html,
+)
+from src.caption_atacantes import (
+    generate_atacantes_caption_plain,
+    generate_atacantes_caption_telegram_md,
+    generate_atacantes_caption_html,
+)
+from src.clipboard_utils import copy_text_to_clipboard
 
 # === PROTEÇÃO POR PIN ===
 def check_pin():
@@ -213,6 +240,14 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
                     mando_mode=tipo_filtro,
                     rodada_curr=rodada_alvo
                 )
+                # Enriquecer com perfis calculados pelo motor invisível
+                try:
+                    _profiles = engine.calculate_goalkeeper_profiles(row)
+                    row["PERFIL_MANDANTE"] = _profiles[0]["PERFIL"]
+                    row["PERFIL_VISITANTE"] = _profiles[1]["PERFIL"]
+                except Exception:
+                    row["PERFIL_MANDANTE"] = "-"
+                    row["PERFIL_VISITANTE"] = "-"
             elif macro_pos == "Laterais":
                 row = engine.generate_laterais_table(
                     mandante,
@@ -421,6 +456,352 @@ if "results_df" in st.session_state:
                 import traceback
                 st.text(traceback.format_exc())
 
+
+# --- VALIDACAO PERFIS DE GOLEIROS ---
+if "results_df" in st.session_state and st.session_state.get("results_key") == "Goleiros":
+    st.divider()
+    with st.expander("Validacao - Perfis de Goleiros", expanded=False):
+        st.caption(
+            "Tabela de validacao temporaria. Mostra os indices e perfis calculados "
+            "para cada goleiro antes de qualquer mudanca no layout visual."
+        )
+        df_gol_raw = st.session_state["results_df"]
+        perfil_rows = []
+        for _, row in df_gol_raw.iterrows():
+            profiles = engine.calculate_goalkeeper_profiles(row.to_dict())
+            for p in profiles:
+                p["RODADA"] = rodada_alvo
+            perfil_rows.extend(profiles)
+
+        if perfil_rows:
+            df_perfil = pd.DataFrame(perfil_rows)
+            cols_order = [
+                "RODADA", "JOGO", "TIME", "MANDO",
+                "SG_INDEX", "PRESSAO_INDEX", "DEFESAS_INDEX", "RISCO_INDEX",
+                "CHUTE_PM_CRUZADO", "PERFIL"
+            ]
+            df_perfil = df_perfil[cols_order]
+            st.dataframe(df_perfil, use_container_width=True)
+
+            csv_perfil = df_perfil.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "Baixar CSV de Perfis",
+                csv_perfil,
+                f"perfis_goleiros_rodada_{rodada_alvo}.csv",
+                "text/csv",
+            )
+        else:
+            st.info("Nenhum dado de goleiros disponivel para calcular perfis.")
+
+# --- LEGENDA AUTOMÁTICA — MEIAS ---
+if "results_df" in st.session_state and st.session_state.get("results_key") == "Meias":
+    st.divider()
+    st.subheader("📋 Legenda automática — Meias")
+    st.caption("Destaques por PASSE P/ FINALIZ., FINALIZAÇÕES, G + A e MÉDIA BÁSICA. Cole no Telegram e envie — o negrito aparece automaticamente.")
+
+    try:
+        df_mei_cap = st.session_state["results_df"]
+        rows_mei   = df_mei_cap.to_dict(orient="records")
+
+        caption_mei_plain = generate_meias_caption_plain(
+            rows=rows_mei, rodada=rodada_alvo, window_n=window_n,
+        )
+        caption_mei_html = generate_meias_caption_html(
+            rows=rows_mei, rodada=rodada_alvo, window_n=window_n,
+        )
+        caption_mei_tg = generate_meias_caption_telegram_md(
+            rows=rows_mei, rodada=rodada_alvo, window_n=window_n,
+        )
+
+        st.markdown(caption_mei_html, unsafe_allow_html=True)
+
+        col_mei_btn, col_mei_msg = st.columns([1, 3])
+        with col_mei_btn:
+            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda_mei", type="primary"):
+                _ok, _err = copy_text_to_clipboard(caption_mei_tg)
+                if _ok:
+                    st.session_state["_legenda_mei_copy_status"] = "ok"
+                else:
+                    st.session_state["_legenda_mei_copy_status"] = _err
+
+        with col_mei_msg:
+            _mei_status = st.session_state.get("_legenda_mei_copy_status", "")
+            if _mei_status == "ok":
+                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
+            elif _mei_status:
+                st.warning(f"⚠️ Não foi possível copiar: {_mei_status}")
+
+        with st.expander("📄 Texto puro (alternativa manual)"):
+            st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
+            st.text_area(
+                label="",
+                value=caption_mei_plain,
+                height=300,
+                key="caption_mei_plain_area",
+            )
+
+    except Exception as _mei_cap_err:
+        st.warning(f"Não foi possível gerar a legenda de meias: {_mei_cap_err}")
+
+# --- LEGENDA AUTOMÁTICA — ATACANTES ---
+if "results_df" in st.session_state and st.session_state.get("results_key") == "Atacantes":
+    st.divider()
+    st.subheader("📋 Legenda automática — Atacantes")
+    st.caption("Destaques por FINALIZAÇÕES, G + A e MÉDIA BÁSICA. Cole no Telegram e envie — o negrito aparece automaticamente.")
+
+    try:
+        df_atk_cap = st.session_state["results_df"]
+        rows_atk   = df_atk_cap.to_dict(orient="records")
+
+        caption_atk_plain = generate_atacantes_caption_plain(
+            rows=rows_atk, rodada=rodada_alvo, window_n=window_n,
+        )
+        caption_atk_html = generate_atacantes_caption_html(
+            rows=rows_atk, rodada=rodada_alvo, window_n=window_n,
+        )
+        caption_atk_tg = generate_atacantes_caption_telegram_md(
+            rows=rows_atk, rodada=rodada_alvo, window_n=window_n,
+        )
+
+        st.markdown(caption_atk_html, unsafe_allow_html=True)
+
+        col_atk_btn, col_atk_msg = st.columns([1, 3])
+        with col_atk_btn:
+            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda_atk", type="primary"):
+                _ok, _err = copy_text_to_clipboard(caption_atk_tg)
+                if _ok:
+                    st.session_state["_legenda_atk_copy_status"] = "ok"
+                else:
+                    st.session_state["_legenda_atk_copy_status"] = _err
+
+        with col_atk_msg:
+            _atk_status = st.session_state.get("_legenda_atk_copy_status", "")
+            if _atk_status == "ok":
+                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
+            elif _atk_status:
+                st.warning(f"⚠️ Não foi possível copiar: {_atk_status}")
+
+        with st.expander("📄 Texto puro (alternativa manual)"):
+            st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
+            st.text_area(
+                label="",
+                value=caption_atk_plain,
+                height=300,
+                key="caption_atk_plain_area",
+            )
+
+    except Exception as _atk_cap_err:
+        st.warning(f"Não foi possível gerar a legenda de atacantes: {_atk_cap_err}")
+
+# --- LEGENDA AUTOMÁTICA — GOLEIROS ---
+if "results_df" in st.session_state and st.session_state.get("results_key") == "Goleiros":
+    st.divider()
+    st.subheader("📋 Legenda automática — Goleiros")
+    st.caption("Apenas perfis positivos (SG+DE, SG, DE). Cole no Telegram e envie — o negrito aparece automaticamente.")
+
+    try:
+        df_gol_cap = st.session_state["results_df"]
+        rows_cap   = df_gol_cap.to_dict(orient="records")
+
+        # Texto puro — fallback manual
+        caption_plain = generate_goalkeeper_caption_plain(
+            goleiros_rows=rows_cap,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # HTML para preview visual no app (negrito renderizado)
+        from src.caption_goleiros import generate_goalkeeper_caption_html as _gen_html
+        caption_html_preview = _gen_html(
+            goleiros_rows=rows_cap,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # Telegram Markdown — o que vai para o clipboard
+        # **texto** → negrito na mensagem enviada no Telegram
+        caption_tg_md = generate_goalkeeper_caption_telegram_md(
+            goleiros_rows=rows_cap,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # --- Prévia formatada (HTML no app, para conferir antes de copiar) ---
+        _preview = caption_html_preview.replace("\n", "<br>")
+        st.markdown(
+            f'<div style="background:#f8f9fa;border-radius:8px;padding:16px 20px;'
+            f'font-size:15px;line-height:1.8;color:#111;">{_preview}</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("&nbsp;", unsafe_allow_html=True)
+
+        # --- Botão de copiar ---
+        # Copia texto com marcadores **Telegram Markdown** via clip.exe (Windows nativo).
+        # Ao colar no Telegram Desktop e ENVIAR, os ** somem e o negrito aparece.
+        col_btn, col_msg = st.columns([1, 3])
+        with col_btn:
+            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda", type="primary"):
+                _ok, _err = copy_text_to_clipboard(caption_tg_md)
+                if _ok:
+                    st.session_state["_legenda_copy_status"] = "ok"
+                else:
+                    st.session_state["_legenda_copy_status"] = _err
+
+        with col_msg:
+            _status = st.session_state.get("_legenda_copy_status", "")
+            if _status == "ok":
+                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
+            elif _status:
+                st.warning(f"⚠️ Não foi possível copiar: {_status}")
+
+        # --- Fallback: texto puro sempre visível ---
+        with st.expander("📄 Texto puro (alternativa manual)"):
+            st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
+            st.text_area(
+                label="",
+                value=caption_plain,
+                height=260,
+                key="caption_plain_area",
+            )
+
+    except Exception as _cap_err:
+        st.warning(f"Não foi possível gerar a legenda: {_cap_err}")
+
+# --- LEGENDA AUTOMÁTICA — LATERAIS ---
+if "results_df" in st.session_state and st.session_state.get("results_key") == "Laterais":
+    st.divider()
+    st.subheader("📋 Legenda automática — Laterais")
+    st.caption("Destaques por DESARMES, MÉD. BÁSICA e G + A. Cole no Telegram e envie — o negrito aparece automaticamente.")
+
+    try:
+        df_lat_cap = st.session_state["results_df"]
+        rows_lat   = df_lat_cap.to_dict(orient="records")
+
+        # Texto puro — fallback manual
+        caption_lat_plain = generate_laterais_caption_plain(
+            rows=rows_lat,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # HTML para preview visual no app (negrito renderizado)
+        caption_lat_html = generate_laterais_caption_html(
+            rows=rows_lat,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # Telegram Markdown — o que vai para o clipboard
+        caption_lat_tg = generate_laterais_caption_telegram_md(
+            rows=rows_lat,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # --- Prévia formatada ---
+        _lat_preview = caption_lat_html.replace("\n", "<br>")
+        st.markdown(
+            f'<div style="background:#f8f9fa;border-radius:8px;padding:16px 20px;'
+            f'font-size:15px;line-height:1.8;color:#111;">{_lat_preview}</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("&nbsp;", unsafe_allow_html=True)
+
+        # --- Botão de copiar ---
+        col_lat_btn, col_lat_msg = st.columns([1, 3])
+        with col_lat_btn:
+            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda_lat", type="primary"):
+                _ok, _err = copy_text_to_clipboard(caption_lat_tg)
+                if _ok:
+                    st.session_state["_legenda_lat_copy_status"] = "ok"
+                else:
+                    st.session_state["_legenda_lat_copy_status"] = _err
+
+        with col_lat_msg:
+            _lat_status = st.session_state.get("_legenda_lat_copy_status", "")
+            if _lat_status == "ok":
+                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
+            elif _lat_status:
+                st.warning(f"⚠️ Não foi possível copiar: {_lat_status}")
+
+        # --- Fallback: texto puro sempre visível ---
+        with st.expander("📄 Texto puro (alternativa manual)"):
+            st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
+            st.text_area(
+                label="",
+                value=caption_lat_plain,
+                height=300,
+                key="caption_lat_plain_area",
+            )
+
+    except Exception as _lat_cap_err:
+        st.warning(f"Não foi possível gerar a legenda de laterais: {_lat_cap_err}")
+
+# --- LEGENDA AUTOMÁTICA — ZAGUEIROS ---
+if "results_df" in st.session_state and st.session_state.get("results_key") == "Zagueiros":
+    st.divider()
+    st.subheader("📋 Legenda automática — Zagueiros")
+    st.caption("Destaques por SG, DESARMES, FINALIZAÇÕES e MÉD. BÁSICA. Cole no Telegram e envie — o negrito aparece automaticamente.")
+
+    try:
+        df_zag_cap = st.session_state["results_df"]
+        rows_zag   = df_zag_cap.to_dict(orient="records")
+
+        # Texto puro — fallback manual
+        caption_zag_plain = generate_zagueiros_caption_plain(
+            rows=rows_zag,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # HTML para preview visual no app (negrito renderizado)
+        caption_zag_html = generate_zagueiros_caption_html(
+            rows=rows_zag,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # Telegram Markdown — o que vai para o clipboard
+        caption_zag_tg = generate_zagueiros_caption_telegram_md(
+            rows=rows_zag,
+            rodada=rodada_alvo,
+            window_n=window_n,
+        )
+
+        # Preview formatado
+        st.markdown(caption_zag_html, unsafe_allow_html=True)
+
+        # --- Botão de copiar ---
+        col_zag_btn, col_zag_msg = st.columns([1, 3])
+        with col_zag_btn:
+            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda_zag", type="primary"):
+                _ok, _err = copy_text_to_clipboard(caption_zag_tg)
+                if _ok:
+                    st.session_state["_legenda_zag_copy_status"] = "ok"
+                else:
+                    st.session_state["_legenda_zag_copy_status"] = _err
+
+        with col_zag_msg:
+            _zag_status = st.session_state.get("_legenda_zag_copy_status", "")
+            if _zag_status == "ok":
+                st.success("✅ Copiado! Cole no Telegram (Ctrl+V) e envie. O negrito aparece na mensagem. 📨")
+            elif _zag_status:
+                st.warning(f"⚠️ Não foi possível copiar: {_zag_status}")
+
+        # --- Fallback: texto puro sempre visível ---
+        with st.expander("📄 Texto puro (alternativa manual)"):
+            st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
+            st.text_area(
+                label="",
+                value=caption_zag_plain,
+                height=300,
+                key="caption_zag_plain_area",
+            )
+
+    except Exception as _zag_cap_err:
+        st.warning(f"Não foi possível gerar a legenda de zagueiros: {_zag_cap_err}")
 
 # --- AUDITORIA ---
 st.divider()

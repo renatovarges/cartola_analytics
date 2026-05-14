@@ -889,3 +889,156 @@ class CartolaEngine:
             "COF_LE_PG": cof_stats["LE_PG"], "CDC_LE_PG": cdc_stats["LE_PG"],
             "COF_LE_BAS": cof_stats["LE_BASICA"], "CDC_LE_BAS": cdc_stats["LE_BASICA"],
         }
+
+    # -------------------------------------------------------------------------
+    #                    MOTOR INVISIVEL - PERFIS DE GOLEIROS
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def calculate_goalkeeper_profiles(gol_row):
+        """
+        Calcula indices e perfil para os dois goleiros de um confronto.
+
+        Recebe o dict retornado por generate_goleiros_table() e retorna
+        uma lista com dois dicts (mandante, visitante).
+        Nao altera nenhuma logica visual nem de renderizacao.
+
+        Perfis possiveis: SG+DE, SG, DE, BOMB, -
+        """
+        def safe(val):
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return 0.0
+
+        def classify_profile(sg_idx, pressao_idx, defesas_idx, risco_idx,
+                             gols_rival, gols_time_cedeu,
+                             chute_pm_rival, chute_pm_time_cedeu,
+                             defesas_time, defesas_rival_cedeu):
+
+            # --- BLOQUEIO_POSITIVO_FORTE ---
+            # Verdadeiro quando o risco eh realmente dominante (bloqueia perfis positivos)
+            bloqueio = (
+                risco_idx >= 5
+                or (gols_rival >= 6 and chute_pm_rival < 3)
+                or (gols_time_cedeu >= 5 and chute_pm_time_cedeu < 4)
+                or (gols_rival >= 5 and gols_time_cedeu >= 4)
+            )
+
+            # --- DEFESA_ROBUSTA ---
+            # Verdadeiro quando ha sustentacao real de defesas (nao apenas media no limite)
+            defesa_robusta = (
+                defesas_idx >= 11
+                or (defesas_time >= 12 and defesas_rival_cedeu >= 8)
+                or (defesas_rival_cedeu >= 12 and defesas_time >= 8)
+                or (defesas_time >= 10 and defesas_rival_cedeu >= 10)
+                or (defesas_idx >= 10 and pressao_idx >= 15)
+            )
+
+            # Regra 1: SG+DE (prioridade maxima)
+            if (sg_idx >= 3 and defesas_idx >= 6
+                    and risco_idx < 5 and pressao_idx < 17
+                    and not bloqueio):
+                return "SG+DE"
+
+            # Regra 2: SG
+            if (sg_idx >= 3 and defesas_idx < 6
+                    and risco_idx < 5
+                    and not bloqueio):
+                return "SG"
+
+            # Regra 3: DE (exige DEFESA_ROBUSTA + pressao minima + sem bloqueio)
+            if (sg_idx < 3 and risco_idx < 5
+                    and pressao_idx >= 12
+                    and defesa_robusta
+                    and not bloqueio):
+                return "DE"
+
+            # Regra 4: BOMB
+            if sg_idx < 3 and (
+                (risco_idx >= 5 and (defesas_idx >= 6 or pressao_idx >= 15))
+                or (gols_rival >= 5 and chute_pm_rival < 4
+                    and (pressao_idx >= 10 or defesas_idx >= 6))
+                or (gols_time_cedeu >= 5 and chute_pm_time_cedeu < 4
+                    and (pressao_idx >= 10 or defesas_idx >= 6))
+            ):
+                return "BOMB"
+
+            return "-"
+
+        mandante = gol_row.get("MANDANTE", "")
+        visitante = gol_row.get("VISITANTE", "")
+        jogo = f"{mandante} x {visitante}"
+
+        # --- Indices do MANDANTE ---
+        # SG_INDEX = COC_SG (SG do mandante em casa) + CDF_SG (SG cedido pelo visitante fora)
+        man_sg = safe(gol_row.get("COC_SG", 0)) + safe(gol_row.get("CDF_SG", 0))
+        # PRESSAO_INDEX = (COF_CHUTES_AG + CDC_CHUTES_AG) / 2
+        man_pressao = round((safe(gol_row.get("COF_CHUTES_AG", 0)) + safe(gol_row.get("CDC_CHUTES_AG", 0))) / 2, 2)
+        # DEFESAS_INDEX = (COC_DE + CDF_DE) / 2
+        man_defesas = round((safe(gol_row.get("COC_DE", 0)) + safe(gol_row.get("CDF_DE", 0))) / 2, 2)
+        # RISCO_INDEX = (COF_GOLS + CDC_GOLS) / 2
+        man_risco = round((safe(gol_row.get("COF_GOLS", 0)) + safe(gol_row.get("CDC_GOLS", 0))) / 2, 2)
+        # CHUTE_PM_CRUZADO = (COF_CHUTES_PM + CDC_CHUTES_PM) / 2  [apenas diagnostico]
+        man_chute_pm = round((safe(gol_row.get("COF_CHUTES_PM", 0)) + safe(gol_row.get("CDC_CHUTES_PM", 0))) / 2, 2)
+        # Dados brutos para BLOQUEIO e DEFESA_ROBUSTA (MANDANTE)
+        man_gols_rival      = safe(gol_row.get("COF_GOLS", 0))
+        man_gols_tc         = safe(gol_row.get("CDC_GOLS", 0))
+        man_pm_rival        = safe(gol_row.get("COF_CHUTES_PM", 0))
+        man_pm_tc           = safe(gol_row.get("CDC_CHUTES_PM", 0))
+        man_defesas_time    = safe(gol_row.get("COC_DE", 0))
+        man_defesas_rival   = safe(gol_row.get("CDF_DE", 0))
+
+        # --- Indices do VISITANTE ---
+        # SG_INDEX = COF_SG (SG do visitante fora) + CDC_SG (SG cedido pelo mandante em casa)
+        vis_sg = safe(gol_row.get("COF_SG", 0)) + safe(gol_row.get("CDC_SG", 0))
+        # PRESSAO_INDEX = (COC_CHUTES_AG + CDF_CHUTES_AG) / 2
+        vis_pressao = round((safe(gol_row.get("COC_CHUTES_AG", 0)) + safe(gol_row.get("CDF_CHUTES_AG", 0))) / 2, 2)
+        # DEFESAS_INDEX = (COF_DE + CDC_DE) / 2
+        vis_defesas = round((safe(gol_row.get("COF_DE", 0)) + safe(gol_row.get("CDC_DE", 0))) / 2, 2)
+        # RISCO_INDEX = (COC_GOLS + CDF_GOLS) / 2
+        vis_risco = round((safe(gol_row.get("COC_GOLS", 0)) + safe(gol_row.get("CDF_GOLS", 0))) / 2, 2)
+        # CHUTE_PM_CRUZADO = (COC_CHUTES_PM + CDF_CHUTES_PM) / 2  [apenas diagnostico]
+        vis_chute_pm = round((safe(gol_row.get("COC_CHUTES_PM", 0)) + safe(gol_row.get("CDF_CHUTES_PM", 0))) / 2, 2)
+        # Dados brutos para BLOQUEIO e DEFESA_ROBUSTA (VISITANTE)
+        vis_gols_rival      = safe(gol_row.get("COC_GOLS", 0))
+        vis_gols_tc         = safe(gol_row.get("CDF_GOLS", 0))
+        vis_pm_rival        = safe(gol_row.get("COC_CHUTES_PM", 0))
+        vis_pm_tc           = safe(gol_row.get("CDF_CHUTES_PM", 0))
+        vis_defesas_time    = safe(gol_row.get("COF_DE", 0))
+        vis_defesas_rival   = safe(gol_row.get("CDC_DE", 0))
+
+        return [
+            {
+                "JOGO": jogo,
+                "TIME": mandante,
+                "MANDO": "MANDANTE",
+                "SG_INDEX": round(man_sg, 2),
+                "PRESSAO_INDEX": man_pressao,
+                "DEFESAS_INDEX": man_defesas,
+                "RISCO_INDEX": man_risco,
+                "CHUTE_PM_CRUZADO": man_chute_pm,
+                "PERFIL": classify_profile(
+                    man_sg, man_pressao, man_defesas, man_risco,
+                    man_gols_rival, man_gols_tc,
+                    man_pm_rival, man_pm_tc,
+                    man_defesas_time, man_defesas_rival,
+                ),
+            },
+            {
+                "JOGO": jogo,
+                "TIME": visitante,
+                "MANDO": "VISITANTE",
+                "SG_INDEX": round(vis_sg, 2),
+                "PRESSAO_INDEX": vis_pressao,
+                "DEFESAS_INDEX": vis_defesas,
+                "RISCO_INDEX": vis_risco,
+                "CHUTE_PM_CRUZADO": vis_chute_pm,
+                "PERFIL": classify_profile(
+                    vis_sg, vis_pressao, vis_defesas, vis_risco,
+                    vis_gols_rival, vis_gols_tc,
+                    vis_pm_rival, vis_pm_tc,
+                    vis_defesas_time, vis_defesas_rival,
+                ),
+            },
+        ]
