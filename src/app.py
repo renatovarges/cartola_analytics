@@ -467,11 +467,15 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
         )
         df_gol_raw = st.session_state["results_df"]
         perfil_rows = []
-        for _, row in df_gol_raw.iterrows():
-            profiles = engine.calculate_goalkeeper_profiles(row.to_dict())
-            for p in profiles:
-                p["RODADA"] = rodada_alvo
-            perfil_rows.extend(profiles)
+        try:
+            for _, row in df_gol_raw.iterrows():
+                profiles = engine.calculate_goalkeeper_profiles(row.to_dict())
+                for p in profiles:
+                    p["RODADA"] = rodada_alvo
+                perfil_rows.extend(profiles)
+        except AttributeError:
+            st.warning("Perfis de goleiros indisponíveis nesta versão do engine. Recarregue a página.")
+            perfil_rows = []
 
         if perfil_rows:
             df_perfil = pd.DataFrame(perfil_rows)
