@@ -489,7 +489,7 @@ class CartolaEngine:
         selected_matches = match_dates.index.tolist()
         
         if not selected_matches:
-             return {"CHUTES": 0, "GOLS": 0, "DE_FORCADA": 0}
+             return {"CHUTES": 0, "GOLS": 0, "DE_FORCADA": 0, "JOGOS_SEM_MARCAR": 0, "PCT_DE_FORCADA": 0.0}
              
         # 1. Chutes e Gols (Do próprio time) - Soma de todos jogadores
         mask_team = self.df_pj["MATCH_ID"].isin(selected_matches) & (self.df_pj["TIME"] == team)
@@ -508,9 +508,10 @@ class CartolaEngine:
         col_de = "DE" if "DE" in df_opp_gk.columns else "DD"
         de_forcada = df_opp_gk[col_de].sum() if col_de in df_opp_gk.columns else 0
 
-        # 3. Jogos Sem Marcar (SG do Adversário)
-        goals_per_match = df_team.groupby("MATCH_ID")["G"].sum()
-        jogos_sem_marcar = (goals_per_match == 0).sum()
+        # 3. Jogos Sem Marcar — usa GS dos goleiros adversários (inclui gols contra;
+        #    pode haver mais de 1 goleiro por jogo em caso de substituição ou lesão)
+        gs_por_jogo = df_opp_gk.groupby("MATCH_ID")["GS"].sum() if "GS" in df_opp_gk.columns else pd.Series(dtype=float)
+        jogos_sem_marcar = sum(1 for mid in selected_matches if gs_por_jogo.get(mid, 0) == 0)
 
         # 4. % DE por jogo (media dos percentuais individuais)
         # Spec: "É uma MÉDIA" - calcula % de cada jogo separadamente, depois tira a média
@@ -522,12 +523,9 @@ class CartolaEngine:
                 (self.df_pj["TIME"] != team) &
                 (self.df_pj["POSICAO"].isin(config.POS_IDS["GOLEIRO"]))
             ]
-            team_m = self.df_pj[
-                (self.df_pj["MATCH_ID"] == mid) &
-                (self.df_pj["TIME"] == team)
-            ]
             de_m = opp_gk_m[col_de_global].sum() if col_de_global in opp_gk_m.columns else 0
-            gols_m = team_m["G"].sum()
+            # Usa GS do goleiro adversário: contabiliza gols contra e múltiplos goleiros
+            gols_m = opp_gk_m["GS"].sum() if "GS" in opp_gk_m.columns else 0
             total_m = de_m + gols_m
             if total_m > 0:
                 pct_per_game.append(de_m / total_m * 100.0)
