@@ -45,10 +45,7 @@ class CartolaEngine:
             
         print("🔄 Iniciando atualização de histórico AF...")
         # Processa upload usando df_pj atual (com Match IDs)
-        if process_new_upload(self.df_scouts, self.df_pj):
-            return "Histórico atualizado com sucesso!"
-        else:
-            return "Nenhuma nova alteração de AF detectada ou erro no processamento."
+        return process_new_upload(self.df_scouts, self.df_pj)
 
     def get_meias_stats_raw(self, date_cutoff=None, mv_filter=None):
         """

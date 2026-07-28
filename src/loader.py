@@ -93,6 +93,29 @@ def load_excel_data(file_path):
     if sheet_scouts:
         print(f"Lendo aba '{sheet_scouts}'...")
         df_sc = pd.read_excel(file_path, sheet_name=sheet_scouts)
+
+        # BLINDAGEM: colunas duplicadas (ex: "Jogador" e "Jogador.1") após o
+        # pandas renomear automaticamente um cabeçalho repetido no Excel.
+        # Se a coluna "original" estiver vazia e a duplicata tiver dados,
+        # usamos a duplicata — evita corromper JOGADOR/TIME com NaN e
+        # destruir o histórico de AF (players despejados como "transferidos").
+        base_cols = {}
+        for col in df_sc.columns:
+            col_str = str(col)
+            base = col_str.split(".")[0] if col_str.split(".")[-1].isdigit() else col_str
+            base_cols.setdefault(base, []).append(col)
+
+        for base, variants in base_cols.items():
+            if len(variants) < 2:
+                continue
+            non_empty = [v for v in variants if not df_sc[v].isna().all()]
+            if len(non_empty) == 1 and non_empty[0] != variants[0]:
+                print(
+                    f"⚠️ Coluna '{variants[0]}' duplicada e vazia na aba Scouts; "
+                    f"usando '{non_empty[0]}' em seu lugar."
+                )
+                df_sc[variants[0]] = df_sc[non_empty[0]]
+
         # Por enquanto lemos bruta, sem normalização pesada, pois será uso secundário
         datasets["SCOUTS"] = df_sc
     

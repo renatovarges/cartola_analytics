@@ -147,7 +147,18 @@ def process_new_upload(df_scouts_new, df_pj_new):
         old_keys = set(zip(df_old["JOGADOR"], df_old["TIME"]))
         new_keys = set(zip(df_new["JOGADOR"], df_new["TIME"]))
         transferred = old_keys - new_keys
-        
+
+        # BLINDAGEM: se a maioria do elenco conhecido "sumiu" de uma vez,
+        # a planilha nova está corrompida (ex: coluna JOGADOR duplicada e
+        # vazia) — abortar em vez de apagar o histórico de AF acumulado.
+        if old_keys and len(transferred) > 0.5 * len(old_keys):
+            raise ValueError(
+                f"Planilha suspeita: {len(transferred)} de {len(old_keys)} jogadores "
+                "conhecidos não foram encontrados na nova aba Scouts. Isso geralmente "
+                "indica uma coluna JOGADOR ou TIME vazia/corrompida na planilha. "
+                "Nenhuma alteração foi feita no histórico de AF."
+            )
+
         if transferred:
             print(f"⚠️ {len(transferred)} jogador(es) transferido(s)/removido(s) detectado(s):")
             

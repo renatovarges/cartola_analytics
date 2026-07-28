@@ -202,7 +202,7 @@ try:
     # Automate AF processing upon load
     with st.sidebar.status("Processando AF Automaticamente...", expanded=True) as status:
         msg = engine.process_af_update()
-        if "sucesso" in msg:
+        if msg.startswith("Histórico atualizado!"):
             status.update(label="✅ AF Atualizado!", state="complete")
             st.sidebar.success(msg)
         else:
