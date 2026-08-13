@@ -349,6 +349,7 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 "fin_t": fin_t, "fin_c": fin_c,
                 "fin_player": fin_player,
                 "bas_t": bas_t, "bas_c": bas_c,
+                "players": row.get(f"JOGADORES_{equipe_key}_ZAG", []) or [],
             }
 
             factor = max(window_n, 1) / 3
@@ -390,6 +391,8 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         for e in entradas:
             article = _fmt_team(e["time"])
             frase   = builder(e, article, wrap)
+            if e.get("players") and builder != _build_fin:
+                frase = f"{b('Opções: ' + ' / '.join(e['players']))}. {frase}"
             if frase:
                 bloco.append(frase)
                 bloco.append("")

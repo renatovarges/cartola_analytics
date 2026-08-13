@@ -46,6 +46,7 @@ from src.caption_volantes import (
 )
 from src.clipboard_utils import copy_text_to_clipboard
 from src.calibration import classify
+from src.cartola_lineups import build_lineups, inject_lineups
 
 # ---------------------------------------------------------------------------
 # Helper — exibe resultado do botão de copiar (Windows ou web)
@@ -304,6 +305,11 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
         progress_bar.progress((i + 1) / len(confrontos))
 
     if results:
+        try:
+            results = inject_lineups(results, build_lineups(engine.df_pj))
+        except Exception:
+            # A API enriquece as frases, mas nunca pode impedir a tabela.
+            pass
         # Salvar no session_state com chave dinamica para nao misturar
         st.session_state["results_key"] = macro_pos
         st.session_state["results_df"] = pd.DataFrame(results)

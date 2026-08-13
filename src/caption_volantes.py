@@ -21,19 +21,21 @@ def _generate(rows, rodada, window_n=3, wrap=None):
             bas = _safe(row, f"{own}_BASICA")
             bas_c = _safe(row, f"{conceded}_BASICA")
             article = _fmt_team(team)
+            players = row.get(f"JOGADORES_{team_key}_VOL", []) or []
+            prefix = ("Opções: " + " / ".join(players) + ". ") if players else ""
             factor = max(window_n, 1) / 3
             if de >= 17 * factor or (de >= 14 * factor and de_c >= 14 * factor):
-                text = f"Os volantes {article} fizeram {int(de)} desarmes nos últimos {window_n} jogos {mando}."
+                text = prefix + f"Os volantes {article} fizeram {int(de)} desarmes nos últimos {window_n} jogos {mando}."
                 if de_c >= 14 * factor:
                     text += f" O adversário também cedeu {int(de_c)} desarmes a volantes."
                 desarmes.append(text)
             if bas >= 4.8 or (bas >= 4.0 and bas_c >= 4.0):
                 basicas.append(
-                    f"Os volantes {article} tiveram média básica de {format_pontos(bas)} pontos nos últimos {window_n} jogos {mando}."
+                    prefix + f"Os volantes {article} tiveram média básica de {format_pontos(bas)} pontos nos últimos {window_n} jogos {mando}."
                 )
             if pg >= 4 * factor or (pg >= 3 * factor and pg_c >= 3 * factor):
                 ofensivas.append(
-                    f"Os volantes {article} somaram {format_pg(pg).lower()} nos últimos {window_n} jogos {mando}."
+                    prefix + f"Os volantes {article} somaram {format_pg(pg).lower()} nos últimos {window_n} jogos {mando}."
                 )
 
     desarmes.sort(key=lambda text: int(text.split(" fizeram ", 1)[1].split(" ", 1)[0]), reverse=True)
