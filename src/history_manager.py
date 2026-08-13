@@ -161,21 +161,12 @@ def process_new_upload(df_scouts_new, df_pj_new):
 
         if transferred:
             print(f"⚠️ {len(transferred)} jogador(es) transferido(s)/removido(s) detectado(s):")
-            
-            db_af = load_af_database()
-            
-            if not db_af.empty:
-                rows_before = len(db_af)
-                for jogador, time in transferred:
-                    print(f"   🔄 {jogador} ({time})")
-                    mask = (db_af["JOGADOR"].str.upper().str.strip() == jogador) & \
-                           (db_af["TIME"].str.upper().str.strip() == time)
-                    db_af = db_af[~mask]
-                
-                rows_removed = rows_before - len(db_af)
-                if rows_removed > 0:
-                    print(f"   🗑️ {rows_removed} registro(s) de AF fantasma removido(s).")
-                    db_af.to_csv(DATABASE_PATH, index=False)
+            # A ausência no snapshot atual não invalida a produção histórica.
+            # Transferidos, dispensados e jogadores omitidos temporariamente devem
+            # continuar ligados aos jogos em que atuaram. Apagar essas linhas
+            # corrompe retrospectivamente as tabelas e os backtests.
+            for jogador, time in transferred:
+                print(f"   ℹ️ {jogador} ({time}) — histórico preservado")
     
     # =========================================================================
     # ETAPA 4: Filtrar deltas significativos

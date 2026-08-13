@@ -94,6 +94,10 @@ def _safe(row: dict, key: str, default: float = 0.0) -> float:
         return default
 
 
+def round_1(value) -> float:
+    return float(f"{float(value):.1f}")
+
+
 # ============================================================
 # FORMATAÇÃO ESPECÍFICA
 # ============================================================
@@ -162,11 +166,7 @@ def _qualifies_desarmes(des_t: float, des_c: float, bas_t: float) -> bool:
     2. Cruzamento forte dos dois lados:      DES_TIME >= 8  E DES_CED >= 8
     3. Adversário cede muito + base mínima:  DES_CED >= 10  E DES_TIME >= 7
     """
-    return (
-        des_t >= 10
-        or (des_t >= 8 and des_c >= 8)
-        or (des_c >= 10 and des_t >= 7)
-    )
+    return des_t >= 6
 
 
 def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
@@ -177,13 +177,7 @@ def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
     3. Adversário cede muito + base mínima:  BAS_CED >= 4.0   E BAS_TIME >= 3.3
     4. Cruzamento alto com base mínima:      BAS_CRUZADA >= 4.0 E BAS_TIME >= 3.3
     """
-    bas_cruzada = (bas_t + bas_c) / 2.0
-    return (
-        bas_t >= 4.0
-        or (bas_t >= 3.5 and bas_c >= 3.5)
-        or (bas_c >= 4.0 and bas_t >= 3.3)
-        or (bas_cruzada >= 4.0 and bas_t >= 3.3)
-    )
+    return bas_t >= 3.1
 
 
 def _qualifies_ga(ga_t: float, ga_c: float, bas_t: float, des_t: float) -> bool:
@@ -193,10 +187,7 @@ def _qualifies_ga(ga_t: float, ga_c: float, bas_t: float, des_t: float) -> bool:
     2. Produção + adversário + contexto: GA_TIME >= 1 E GA_CED >= 2
                                          E (BAS_TIME >= 3.5 OU DES_TIME >= 8)
     """
-    return (
-        ga_t >= 2
-        or (ga_t >= 1 and ga_c >= 2 and (bas_t >= 3.5 or des_t >= 8))
-    )
+    return ga_t >= 1
 
 
 # ============================================================
@@ -286,7 +277,7 @@ _POSICOES = [
 ]
 
 
-def _collect_candidates(rows: list) -> dict:
+def _collect_candidates(rows: list, window_n: int = 3) -> dict:
     """Percorre todas as linhas e separa candidatos por bloco.
 
     Retorna {'des': [...], 'bas': [...], 'ga': [...]}.
@@ -320,11 +311,12 @@ def _collect_candidates(rows: list) -> dict:
                 "bas_t": bas_t, "bas_c": bas_c,
             }
 
-            if _qualifies_desarmes(des_t, des_c, bas_t):
+            factor = max(window_n, 1) / 3
+            if des_t >= 10 * factor or (des_t >= 8 * factor and des_c >= 8 * factor):
                 des_list.append(entry)
-            if _qualifies_bas(bas_t, bas_c):
+            if round_1(bas_t) >= 4.2 or (round_1(bas_t) >= 3.7 and round_1(bas_c) >= 3.7):
                 bas_list.append(entry)
-            if _qualifies_ga(ga_t, ga_c, bas_t, des_t):
+            if ga_t >= 3 * factor or (ga_t >= 2 * factor and ga_c >= 2 * factor):
                 ga_list.append(entry)
 
     return {"des": des_list, "bas": bas_list, "ga": ga_list}
@@ -336,10 +328,27 @@ def _collect_candidates(rows: list) -> dict:
 
 def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     b          = _make_bold(wrap)
-    candidates = _collect_candidates(rows)
+    candidates = _collect_candidates(rows, window_n)
     des_list   = candidates["des"]
     bas_list   = candidates["bas"]
     ga_list    = candidates["ga"]
+
+    # LE e LD usam a mesma posição no Cartola. Na legenda, evita repetir o mesmo
+    # time duas vezes no mesmo scout; conserva o lado com o número mais alto.
+    def _one_per_team(entries, metric):
+        chosen = {}
+        for entry in entries:
+            current = chosen.get(entry["time"])
+            if current is None or entry[metric] > current[metric]:
+                chosen[entry["time"]] = entry
+        return list(chosen.values())
+
+    des_list = _one_per_team(des_list, "des_t")
+    bas_list = _one_per_team(bas_list, "bas_t")
+    ga_list = _one_per_team(ga_list, "ga_t")
+    des_list = sorted(des_list, key=lambda e: (e["des_t"], e["des_c"]), reverse=True)[:2]
+    bas_list = sorted(bas_list, key=lambda e: (e["bas_t"], e["bas_c"]), reverse=True)[:2]
+    ga_list = sorted(ga_list, key=lambda e: (e["ga_t"], e["ga_c"]), reverse=True)[:2]
 
     lines = [
         b("ANÁLISE ESTATÍSTICA — LATERAIS"),

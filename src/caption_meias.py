@@ -166,11 +166,7 @@ def _qualifies_af(af_t: float, af_c: float) -> bool:
     2. Produção sólida + cedido alto: AF_TIME >= 10  E  AF_CED >= 12
     3. Base mínima + cedido muito alto: AF_TIME >= 9  E  AF_CED >= 15
     """
-    return (
-        af_t >= 12
-        or (af_t >= 10 and af_c >= 12)
-        or (af_t >= 9  and af_c >= 15)
-    )
+    return af_t >= 8
 
 
 def _qualifies_fin(fin_t: float, fin_c: float) -> bool:
@@ -182,11 +178,7 @@ def _qualifies_fin(fin_t: float, fin_c: float) -> bool:
 
     Nota: FIN_TIME=7 e FIN_CED=7 NÃO entra — está abaixo do corte visual da tabela.
     """
-    return (
-        fin_t >= 9
-        or (fin_t >= 8 and fin_c >= 10)
-        or (fin_t >= 7 and fin_c >= 12)
-    )
+    return fin_t >= 7
 
 
 def _qualifies_pg(pg_t: float, pg_c: float, af_t: float, fin_t: float) -> bool:
@@ -198,10 +190,7 @@ def _qualifies_pg(pg_t: float, pg_c: float, af_t: float, fin_t: float) -> bool:
 
     Nota: PG_TIME=2 e PG_CED=2 NÃO entra — dado setorial exige adversário cedendo mais.
     """
-    return (
-        pg_t >= 3
-        or (pg_t >= 2 and pg_c >= 3 and (af_t >= 9 or fin_t >= 7))
-    )
+    return pg_t >= 2
 
 
 def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
@@ -216,11 +205,7 @@ def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
     """
     t = round_1(bas_t)
     c = round_1(bas_c)
-    return (
-        t >= 3.0
-        or (t >= 2.5 and c >= 3.0)
-        or (t >= 2.4 and c >= 3.5)
-    )
+    return t >= 2.4
 
 
 # ============================================================
@@ -347,7 +332,7 @@ _POSICOES = [
 ]
 
 
-def _collect_candidates(rows: list) -> dict:
+def _collect_candidates(rows: list, window_n: int = 3) -> dict:
     """Percorre todas as linhas e separa candidatos por bloco.
 
     Retorna {'af': [...], 'fin': [...], 'pg': [...], 'bas': [...]}.
@@ -387,13 +372,14 @@ def _collect_candidates(rows: list) -> dict:
                 "bas_t": bas_t, "bas_c": bas_c,
             }
 
-            if _qualifies_af(af_t, af_c):
+            factor = max(window_n, 1) / 3
+            if af_t >= 12 * factor or (af_t >= 9 * factor and af_c >= 9 * factor):
                 af_list.append(entry)
-            if _qualifies_fin(fin_t, fin_c):
+            if fin_t >= 12 * factor or (fin_t >= 9 * factor and fin_c >= 9 * factor):
                 fin_list.append(entry)
-            if _qualifies_pg(pg_t, pg_c, af_t, fin_t):
+            if pg_t >= 5 * factor or (pg_t >= 3 * factor and pg_c >= 3 * factor):
                 pg_list.append(entry)
-            if _qualifies_bas(bas_t, bas_c):
+            if round_1(bas_t) >= 3.3 or (round_1(bas_t) >= 2.9 and round_1(bas_c) >= 2.9):
                 bas_list.append(entry)
 
     return {"af": af_list, "fin": fin_list, "pg": pg_list, "bas": bas_list}
@@ -405,11 +391,18 @@ def _collect_candidates(rows: list) -> dict:
 
 def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     b          = _make_bold(wrap)
-    candidates = _collect_candidates(rows)
+    candidates = _collect_candidates(rows, window_n)
     af_list    = candidates["af"]
     fin_list   = candidates["fin"]
     pg_list    = candidates["pg"]
     bas_list   = candidates["bas"]
+
+    # A tabela preserva todos os sinais; a legenda resume os dois maiores de
+    # cada scout para continuar sendo uma seleção, não uma repetição da tabela.
+    af_list = sorted(af_list, key=lambda e: (e["af_t"], e["af_c"]), reverse=True)[:2]
+    fin_list = sorted(fin_list, key=lambda e: (e["fin_t"], e["fin_c"]), reverse=True)[:2]
+    pg_list = sorted(pg_list, key=lambda e: (e["pg_t"], e["pg_c"]), reverse=True)[:2]
+    bas_list = sorted(bas_list, key=lambda e: (e["bas_t"], e["bas_c"]), reverse=True)[:2]
 
     lines = [
         b("ANÁLISE ESTATÍSTICA — MEIAS"),
