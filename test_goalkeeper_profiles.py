@@ -1,6 +1,7 @@
 import unittest
 
 from src.engine import CartolaEngine
+from src.caption_goleiros import generate_goalkeeper_caption_plain
 
 
 def base_row(**updates):
@@ -53,6 +54,22 @@ class GoalkeeperProfileTests(unittest.TestCase):
         combined = base_row(COF_GOLS=6, CDC_GOLS=5)
         self.assertEqual(CartolaEngine.calculate_goalkeeper_profiles(only_attack)[0]["PERFIL"], "RISCO")
         self.assertEqual(CartolaEngine.calculate_goalkeeper_profiles(combined)[0]["PERFIL"], "ALTO_RISCO")
+
+    def test_caption_uses_player_and_reason_without_generic_phrase(self):
+        row = base_row(COC_DE=12, COC_SG=2)
+        row.update({"PERFIL_MANDANTE": "AMBOS", "DEFESAS_NIVEL_MANDANTE": "FORTE",
+                    "SG_NIVEL_MANDANTE": "FORTE", "JOGADORES_MANDANTE_GOL": ["Rossi"]})
+        text = generate_goalkeeper_caption_plain([row], 23, 3)
+        self.assertIn("Rossi reúne bom potencial de SG e defesas", text)
+        self.assertNotIn("aparece bem", text)
+
+    def test_caption_lists_doubt_in_parentheses(self):
+        row = base_row(COC_DE=12)
+        row.update({"PERFIL_MANDANTE": "DEFESAS", "DEFESAS_NIVEL_MANDANTE": "FORTE",
+                    "SG_NIVEL_MANDANTE": "-",
+                    "JOGADORES_MANDANTE_GOL": ["Rossi", "Matheus Cunha (Dúvida)"]})
+        text = generate_goalkeeper_caption_plain([row], 23, 3)
+        self.assertIn("Rossi e Matheus Cunha (Dúvida)", text)
 
 
 if __name__ == "__main__":

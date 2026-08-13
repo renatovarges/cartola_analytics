@@ -263,6 +263,13 @@ def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None) -> st
     article   = format_team_article(time)   # "do Flamengo"
     subject   = format_team_subject(time)   # "O Flamengo"
     mando_txt = "em casa" if mando == "MANDANTE" else "fora"
+    jogadores = row.get(f"JOGADORES_{mando}_GOL", []) or []
+    if jogadores:
+        subject_gol = " e ".join(jogadores)
+    else:
+        subject_gol = f"O goleiro {article}"
+    sg_level = str(row.get(f"SG_NIVEL_{mando}", "-"))
+    def_level = str(row.get(f"DEFESAS_NIVEL_{mando}", "-"))
 
     if mando == "MANDANTE":
         sg_t  = _safe(row, "COC_SG")
@@ -281,21 +288,27 @@ def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None) -> st
     def_r_i = int(def_r)
 
     if perfil == "AMBOS":
+        if sg_level == "FORTE" and def_level != "FORTE":
+            leitura = "bom potencial de SG e chance de somar defesas"
+        elif def_level == "FORTE" and sg_level != "FORTE":
+            leitura = "bom potencial de defesas sem perder a possibilidade de SG"
+        else:
+            leitura = "bom potencial de SG e defesas"
         return (
-            f"🛡️🧤 {b(f'O goleiro {article}')} aparece bem para {b('defesas e SG')}. "
+            f"🛡️🧤 {b(subject_gol)} reúne {b(leitura)}. "
             f"Fez {b(f'{def_t_i} defesas')} e pegou {b(format_sg(sg_t_i))} "
             f"nos últimos jogos {mando_txt}."
         )
 
     if perfil == "SG":
         return (
-            f"🛡️ {b(f'O goleiro {article}')} aparece bem para {b('SG')}. "
+            f"🛡️ {b(subject_gol)} tem {b('boas condições de sair com SG')}. "
             f"O time pegou {b(format_sg(sg_t_i))} nos últimos jogos {mando_txt}."
         )
 
     if perfil == "DEFESAS":
         return (
-            f"🧤 {b(f'O goleiro {article}')} aparece bem para {b('defesas')}. "
+            f"🧤 {b(subject_gol)} tem {b('bom potencial para acumular defesas')}. "
             f"Fez {b(f'{def_t_i} defesas')} nos últimos jogos {mando_txt}."
         )
 
