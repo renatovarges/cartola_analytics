@@ -7,7 +7,7 @@ class CalibrationBoundaryTests(unittest.TestCase):
     def test_median_values_stay_white(self):
         self.assertIsNone(classify("ATACANTES", "COC_CHUTES", 16, 3))
         self.assertIsNone(classify("ATACANTES", "COC_AF", 30, 3))
-        self.assertIsNone(classify("ATACANTES", "COC_PG", 8, 3))
+        self.assertIsNone(classify("ATACANTES", "COC_PG", 2, 3))
         self.assertIsNone(classify("MEIAS", "COC_AF", 7, 3))
         self.assertIsNone(classify("LATERAIS", "COC_LE_DE", 5, 3))
         self.assertIsNone(classify("ZAGUEIROS", "COC_DE", 8, 3))
@@ -16,6 +16,9 @@ class CalibrationBoundaryTests(unittest.TestCase):
         self.assertEqual(classify("ATACANTES", "COC_CHUTES", 17, 3), "light")
         self.assertEqual(classify("ATACANTES", "COC_CHUTES", 20, 3), "medium")
         self.assertEqual(classify("ATACANTES", "COC_CHUTES", 23, 3), "dark")
+        self.assertEqual(classify("ATACANTES", "COC_PG", 3, 3), "light")
+        self.assertEqual(classify("ATACANTES", "COC_PG", 5, 3), "medium")
+        self.assertEqual(classify("ATACANTES", "COC_PG", 7, 3), "dark")
         self.assertEqual(classify("MEIAS", "COC_AF", 8, 3), "light")
         self.assertEqual(classify("MEIAS", "COC_AF", 9, 3), "medium")
         self.assertEqual(classify("MEIAS", "COC_AF", 12, 3), "dark")

@@ -323,8 +323,10 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
             }
 
             factor = max(window_n, 1) / 3
-            if fin_t >= 23 * factor or (fin_t >= 20 * factor and fin_c >= 20 * factor):
+            if fin_t >= 20 * factor or (fin_t >= 17 * factor and fin_c >= 17 * factor):
                 fin_list.append(entry)
+            if pg_t >= 5 * factor or (pg_t >= 3 * factor and fin_t >= 20 * factor):
+                pg_list.append(entry)
             if round_1(bas_t) >= 3.5 or (round_1(bas_t) >= 3.0 and round_1(bas_c) >= 3.0):
                 bas_list.append(entry)
 
@@ -341,6 +343,9 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     fin_list   = candidates["fin"]
     pg_list    = candidates["pg"]
     bas_list   = candidates["bas"]
+    pg_list = sorted(pg_list, key=lambda e: (e["pg_t"], e["fin_t"], e["pg_c"]), reverse=True)[:3]
+    fin_list = sorted(fin_list, key=lambda e: (e["fin_t"], e["fin_c"]), reverse=True)[:2]
+    bas_list = sorted(bas_list, key=lambda e: (e["bas_t"], e["bas_c"]), reverse=True)[:2]
 
     lines = [
         b("ANÁLISE ESTATÍSTICA — ATACANTES"),
@@ -378,10 +383,10 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     def _build_bas(e, article, wrap):
         return _sentence_bas(article, e["bas_t"], e["bas_c"], e["mando_txt"], wrap)
 
-    if fin_list:
-        lines += _bloco("🚀 ATACANTES PARA FINALIZAÇÕES", fin_list, _build_fin)
     if pg_list:
         lines += _bloco("⚽ ATACANTES PARA G + A", pg_list, _build_pg)
+    if fin_list:
+        lines += _bloco("🚀 ATACANTES PARA FINALIZAÇÕES", fin_list, _build_fin)
     if bas_list:
         lines += _bloco("📊 ATACANTES PARA MÉDIA BÁSICA", bas_list, _build_bas)
 

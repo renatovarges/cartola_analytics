@@ -33,8 +33,8 @@ POSITION_THRESHOLDS = {
     "ATACANTES": {
         # 13 foi comum demais e quase não separou o jogo seguinte. 17+ separou.
         "CHUTES": Thresholds(17, 20, 23),
-        # G+A continua visível, mas não recebe cor automática: mesmo apoiado por
-        # finalizações, não repetiu acima do grupo branco nesta amostra.
+        "PG": Thresholds(3, 5, 7),
+        # Gol é o principal retorno do atacante; G+A recebe escala própria.
         "BASICA": Thresholds(2.6, 3.0, 3.5, True),
     },
     "MEIAS": {
