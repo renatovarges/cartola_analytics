@@ -253,7 +253,7 @@ def _sg_motivo(sg_t: float, sg_r: float, wrap=None) -> str:
 # MONTAGEM DA FRASE — CANÔNICA (única fonte de verdade)
 # ============================================================
 
-def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None) -> str:
+def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None, variant=0) -> str:
     """Frase completa para um goleiro.
 
     O formato (plain / Telegram MD / HTML) é controlado por `wrap`.
@@ -289,28 +289,40 @@ def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None) -> st
 
     if perfil == "AMBOS":
         if sg_level == "FORTE" and def_level != "FORTE":
-            leitura = "bom potencial de SG e chance de somar defesas"
+            templates = [
+                f"🛡️🧤 {b(subject_gol)} tem {b('o SG como principal atrativo')}, com espaço também para defesas. O time pegou {b(format_sg(sg_t_i))} e o goleiro fez {b(f'{def_t_i} defesas')} nos últimos jogos {mando_txt}.",
+                f"🛡️🧤 O confronto de {b(subject_gol)} favorece mais o {b('SG')}, mas ainda pode render defesas. Foram {b(format_sg(sg_t_i))} e {b(f'{def_t_i} defesas')} no recorte {mando_txt}.",
+                f"🛡️🧤 {b(subject_gol)} chega com {b('cenário forte para SG')}. As {b(f'{def_t_i} defesas')} recentes acrescentam uma segunda possibilidade de pontuação.",
+            ]
         elif def_level == "FORTE" and sg_level != "FORTE":
-            leitura = "bom potencial de defesas sem perder a possibilidade de SG"
+            templates = [
+                f"🛡️🧤 {b(subject_gol)} pode ser bastante exigido: fez {b(f'{def_t_i} defesas')} nos últimos jogos {mando_txt}. O time também conseguiu {b(format_sg(sg_t_i))}.",
+                f"🛡️🧤 O melhor caminho para {b(subject_gol)} está nas {b('defesas')}. Foram {b(f'{def_t_i}')} no recorte, além de {b(format_sg(sg_t_i))}.",
+                f"🛡️🧤 {b(subject_gol)} encontra boas oportunidades para {b('pontuar com defesas')}. Também passou sem sofrer gols em {b(format_sg(sg_t_i))} no período.",
+            ]
         else:
-            leitura = "bom potencial de SG e defesas"
-        return (
-            f"🛡️🧤 {b(subject_gol)} reúne {b(leitura)}. "
-            f"Fez {b(f'{def_t_i} defesas')} e pegou {b(format_sg(sg_t_i))} "
-            f"nos últimos jogos {mando_txt}."
-        )
+            templates = [
+                f"🛡️🧤 {b(subject_gol)} combina {b('segurança para SG e volume de defesas')}: registrou {b(f'{def_t_i} defesas')} e {b(format_sg(sg_t_i))} nos últimos jogos {mando_txt}.",
+                f"🛡️🧤 O cenário de {b(subject_gol)} é completo. Há força tanto para {b('SG')} quanto para defesas, com {b(f'{def_t_i} defesas')} e {b(format_sg(sg_t_i))} no recorte.",
+                f"🛡️🧤 {b(subject_gol)} oferece duas rotas de pontuação: {b('SG e defesas')}. No período, somou {b(f'{def_t_i} defesas')} e passou {b(format_sg(sg_t_i))} sem sofrer gols.",
+            ]
+        return templates[variant % len(templates)]
 
     if perfil == "SG":
-        return (
-            f"🛡️ {b(subject_gol)} tem {b('boas condições de sair com SG')}. "
-            f"O time pegou {b(format_sg(sg_t_i))} nos últimos jogos {mando_txt}."
-        )
+        templates = [
+            f"🛡️ {b(subject_gol)} tem {b('boas condições de sair com SG')}. O time pegou {b(format_sg(sg_t_i))} nos últimos jogos {mando_txt}.",
+            f"🛡️ O principal atrativo de {b(subject_gol)} é o {b('potencial de SG')}: foram {b(format_sg(sg_t_i))} no recorte {mando_txt}.",
+            f"🛡️ {b(subject_gol)} encontra um {b('confronto interessante para SG')}. O time passou {b(format_sg(sg_t_i))} sem sofrer gols no período.",
+        ]
+        return templates[variant % len(templates)]
 
     if perfil == "DEFESAS":
-        return (
-            f"🧤 {b(subject_gol)} tem {b('bom potencial para acumular defesas')}. "
-            f"Fez {b(f'{def_t_i} defesas')} nos últimos jogos {mando_txt}."
-        )
+        templates = [
+            f"🧤 {b(subject_gol)} tem {b('bom potencial para acumular defesas')}. Fez {b(f'{def_t_i} defesas')} nos últimos jogos {mando_txt}.",
+            f"🧤 O confronto pode exigir bastante de {b(subject_gol)}. As {b(f'{def_t_i} defesas')} recentes reforçam essa possibilidade.",
+            f"🧤 {b(subject_gol)} surge como opção para quem busca {b('pontuação por defesas')}, após {b(f'{def_t_i}')} no recorte {mando_txt}.",
+        ]
+        return templates[variant % len(templates)]
 
     return ""
 
@@ -391,8 +403,8 @@ def _generate(
         )
 
     lines = cabecalho + [""]
-    for e in entries:
-        frase = _build_entry(e["time"], e["perfil"], e["row"], e["mando"], wrap=wrap)
+    for index, e in enumerate(entries):
+        frase = _build_entry(e["time"], e["perfil"], e["row"], e["mando"], wrap=wrap, variant=index)
         if frase:
             lines.append(frase)
             lines.append("")

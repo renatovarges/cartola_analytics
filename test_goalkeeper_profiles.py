@@ -60,7 +60,7 @@ class GoalkeeperProfileTests(unittest.TestCase):
         row.update({"PERFIL_MANDANTE": "AMBOS", "DEFESAS_NIVEL_MANDANTE": "FORTE",
                     "SG_NIVEL_MANDANTE": "FORTE", "JOGADORES_MANDANTE_GOL": ["Rossi"]})
         text = generate_goalkeeper_caption_plain([row], 23, 3)
-        self.assertIn("Rossi reúne bom potencial de SG e defesas", text)
+        self.assertIn("Rossi combina segurança para SG e volume de defesas", text)
         self.assertNotIn("aparece bem", text)
 
     def test_caption_lists_doubt_in_parentheses(self):
@@ -70,6 +70,18 @@ class GoalkeeperProfileTests(unittest.TestCase):
                     "JOGADORES_MANDANTE_GOL": ["Rossi", "Matheus Cunha (Dúvida)"]})
         text = generate_goalkeeper_caption_plain([row], 23, 3)
         self.assertIn("Rossi e Matheus Cunha (Dúvida)", text)
+
+    def test_repeated_profiles_use_different_sentence_structures(self):
+        rows = []
+        for name in ("Warleson", "Ronaldo", "Carlos Miguel"):
+            row = base_row(COC_DE=15, COC_SG=1)
+            row.update({"PERFIL_MANDANTE": "AMBOS", "DEFESAS_NIVEL_MANDANTE": "FORTE",
+                        "SG_NIVEL_MANDANTE": "BOM", "JOGADORES_MANDANTE_GOL": [name]})
+            rows.append(row)
+        text = generate_goalkeeper_caption_plain(rows, 23, 3)
+        self.assertEqual(text.count("pode ser bastante exigido"), 1)
+        self.assertEqual(text.count("O melhor caminho"), 1)
+        self.assertEqual(text.count("boas oportunidades"), 1)
 
 
 if __name__ == "__main__":
