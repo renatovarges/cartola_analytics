@@ -162,7 +162,7 @@ _ARTIGOS_SUJEITO = {
 }
 
 # Perfis que entram na legenda e sua ordem de exibição
-_PERFIS_POSITIVOS = {"SG+DE": 0, "SG": 1, "DE": 2}
+_PERFIS_POSITIVOS = {"AMBOS": 0, "SG": 1, "DEFESAS": 2}
 
 
 # ============================================================
@@ -280,28 +280,23 @@ def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None) -> st
     def_t_i = int(def_t)
     def_r_i = int(def_r)
 
-    if perfil == "SG+DE":
+    if perfil == "AMBOS":
         return (
-            f"🛡️🧤 {b(f'O goleiro {article}')} tem bom perfil pra {b('SG + DEFESAS')}. "
-            f"Nos últimos 3 jogos {mando_txt}, ele pegou {b(format_sg(sg_t_i))} "
-            f"e o adversário cedeu {b(format_sg(sg_r_i))}, além disso, "
-            f"conquistou {b(f'{def_t_i} defesas')} e o adversário cedeu "
-            f"{b(str(def_r_i))} aos goleiros rivais."
+            f"🛡️🧤 {b(f'O goleiro {article}')} aparece bem para {b('defesas e SG')}. "
+            f"Fez {b(f'{def_t_i} defesas')} e pegou {b(format_sg(sg_t_i))} "
+            f"nos últimos jogos {mando_txt}."
         )
 
     if perfil == "SG":
-        motivo = _sg_motivo(sg_t, sg_r, wrap=wrap)
         return (
-            f"🛡️ {b(f'O goleiro {article}')} tem perfil mais voltado pra {b('SG')}, "
-            f"sem depender tanto de defesas. "
-            f"{subject} tem um bom SG porque {motivo}."
+            f"🛡️ {b(f'O goleiro {article}')} aparece bem para {b('SG')}. "
+            f"O time pegou {b(format_sg(sg_t_i))} nos últimos jogos {mando_txt}."
         )
 
-    if perfil == "DE":
+    if perfil == "DEFESAS":
         return (
-            f"🧤 {b(f'O goleiro {article}')} tem bom perfil pra fazer {b('DEFESAS')}. "
-            f"Ele conquistou {b(f'{def_t_i} defesas')} nos últimos 3 jogos "
-            f"{mando_txt} e o adversário cedeu {b(f'{def_r_i} defesas')} aos goleiros rivais."
+            f"🧤 {b(f'O goleiro {article}')} aparece bem para {b('defesas')}. "
+            f"Fez {b(f'{def_t_i} defesas')} nos últimos jogos {mando_txt}."
         )
 
     return ""
@@ -325,17 +320,24 @@ def _collect_entries(goleiros_rows: list) -> list:
         if perf_v in ("nan", "None", "", "NaN"):
             perf_v = "-"
 
-        if perf_m in _PERFIS_POSITIVOS:
+        strong_m = row.get("SG_NIVEL_MANDANTE") == "FORTE" or row.get("DEFESAS_NIVEL_MANDANTE") == "FORTE"
+        strong_v = row.get("SG_NIVEL_VISITANTE") == "FORTE" or row.get("DEFESAS_NIVEL_VISITANTE") == "FORTE"
+
+        if perf_m in _PERFIS_POSITIVOS and strong_m:
             entries.append({
                 "order": _PERFIS_POSITIVOS[perf_m],
+                "strength": int(row.get("SG_NIVEL_MANDANTE") == "FORTE") + int(row.get("DEFESAS_NIVEL_MANDANTE") == "FORTE"),
+                "volume": _safe(row, "COC_DE") + 3 * _safe(row, "COC_SG"),
                 "time":  mandante,
                 "perfil": perf_m,
                 "mando": "MANDANTE",
                 "row":   row,
             })
-        if perf_v in _PERFIS_POSITIVOS:
+        if perf_v in _PERFIS_POSITIVOS and strong_v:
             entries.append({
                 "order": _PERFIS_POSITIVOS[perf_v],
+                "strength": int(row.get("SG_NIVEL_VISITANTE") == "FORTE") + int(row.get("DEFESAS_NIVEL_VISITANTE") == "FORTE"),
+                "volume": _safe(row, "COF_DE") + 3 * _safe(row, "COF_SG"),
                 "time":  visitante,
                 "perfil": perf_v,
                 "mando": "VISITANTE",
@@ -358,7 +360,9 @@ def _generate(
     b = _make_bold(wrap)
 
     entries = _collect_entries(goleiros_rows)
-    entries.sort(key=lambda e: e["order"])
+    entries.sort(key=lambda e: (e["strength"], e["volume"], -e["order"]), reverse=True)
+    if max_entries is None:
+        max_entries = 5
     if max_entries is not None:
         entries = entries[:max_entries]
 

@@ -159,11 +159,7 @@ def _qualifies_fin(fin_t: float, fin_c: float) -> bool:
     2. Produção sólida + cedido alto:    FIN_TIME >= 15  E  FIN_CED >= 15
     3. Base mínima + cedido muito alto:  FIN_TIME >= 12  E  FIN_CED >= 21
     """
-    return (
-        fin_t >= 18
-        or (fin_t >= 15 and fin_c >= 15)
-        or (fin_t >= 12 and fin_c >= 21)
-    )
+    return fin_t >= 17
 
 
 def _qualifies_pg(pg_t: float, pg_c: float, fin_t: float) -> bool:
@@ -175,11 +171,7 @@ def _qualifies_pg(pg_t: float, pg_c: float, fin_t: float) -> bool:
                                                PG_TIME >= 3  E  PG_CED >= 6
                                                E  FIN_TIME >= 15
     """
-    return (
-        pg_t >= 5
-        or (pg_t >= 4 and pg_c >= 4)
-        or (pg_t >= 3 and pg_c >= 6 and fin_t >= 15)
-    )
+    return False
 
 
 def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
@@ -193,11 +185,7 @@ def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
     """
     t = round_1(bas_t)
     c = round_1(bas_c)
-    return (
-        t >= 3.0
-        or (t >= 2.5 and c >= 3.0)
-        or (t >= 2.4 and c >= 3.5)
-    )
+    return t >= 2.6
 
 
 # ============================================================
@@ -297,7 +285,7 @@ _POSICOES = [
 ]
 
 
-def _collect_candidates(rows: list) -> dict:
+def _collect_candidates(rows: list, window_n: int = 3) -> dict:
     """Percorre todas as linhas e separa candidatos por bloco.
 
     Retorna {'fin': [...], 'pg': [...], 'bas': [...]}.
@@ -333,11 +321,10 @@ def _collect_candidates(rows: list) -> dict:
                 "bas_t": bas_t, "bas_c": bas_c,
             }
 
-            if _qualifies_fin(fin_t, fin_c):
+            factor = max(window_n, 1) / 3
+            if fin_t >= 23 * factor or (fin_t >= 20 * factor and fin_c >= 20 * factor):
                 fin_list.append(entry)
-            if _qualifies_pg(pg_t, pg_c, fin_t):
-                pg_list.append(entry)
-            if _qualifies_bas(bas_t, bas_c):
+            if round_1(bas_t) >= 3.5 or (round_1(bas_t) >= 3.0 and round_1(bas_c) >= 3.0):
                 bas_list.append(entry)
 
     return {"fin": fin_list, "pg": pg_list, "bas": bas_list}
@@ -349,7 +336,7 @@ def _collect_candidates(rows: list) -> dict:
 
 def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     b          = _make_bold(wrap)
-    candidates = _collect_candidates(rows)
+    candidates = _collect_candidates(rows, window_n)
     fin_list   = candidates["fin"]
     pg_list    = candidates["pg"]
     bas_list   = candidates["bas"]

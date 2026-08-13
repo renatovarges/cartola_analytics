@@ -39,7 +39,13 @@ from src.caption_atacantes import (
     generate_atacantes_caption_telegram_md,
     generate_atacantes_caption_html,
 )
+from src.caption_volantes import (
+    generate_volantes_caption_plain,
+    generate_volantes_caption_telegram_md,
+    generate_volantes_caption_html,
+)
 from src.clipboard_utils import copy_text_to_clipboard
+from src.calibration import classify
 
 # ---------------------------------------------------------------------------
 # Helper — exibe resultado do botão de copiar (Windows ou web)
@@ -264,6 +270,10 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
                     _profiles = engine.calculate_goalkeeper_profiles(row)
                     row["PERFIL_MANDANTE"] = _profiles[0]["PERFIL"]
                     row["PERFIL_VISITANTE"] = _profiles[1]["PERFIL"]
+                    row["DEFESAS_NIVEL_MANDANTE"] = _profiles[0]["DEFESAS_NIVEL"]
+                    row["DEFESAS_NIVEL_VISITANTE"] = _profiles[1]["DEFESAS_NIVEL"]
+                    row["SG_NIVEL_MANDANTE"] = _profiles[0]["SG_NIVEL"]
+                    row["SG_NIVEL_VISITANTE"] = _profiles[1]["SG_NIVEL"]
                 except Exception:
                     row["PERFIL_MANDANTE"] = "-"
                     row["PERFIL_VISITANTE"] = "-"
@@ -297,6 +307,7 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
         # Salvar no session_state com chave dinamica para nao misturar
         st.session_state["results_key"] = macro_pos
         st.session_state["results_df"] = pd.DataFrame(results)
+        st.session_state["results_subtype"] = mv_filter_val if macro_pos == "Meias" else None
     else:
         st.warning("Nenhum dado gerado.")
 
@@ -306,11 +317,19 @@ if "results_df" in st.session_state:
     current_pos = st.session_state.get("results_key", "Meias")
     
     # Definir Colunas de Exibição Baseado no Tipo
-    if current_pos == "Meias" or current_pos == "Atacantes":
-        # Ordem Meias
+    subtype = st.session_state.get("results_subtype")
+    if current_pos == "Meias" and subtype == "VOLANTE":
+        left_cols = ["COC_DE", "CDF_DE", "COC_PG", "CDF_PG", "COC_BASICA", "CDF_BASICA"]
+        center_cols = ["MANDANTE", "VISITANTE"]
+        right_cols = ["COF_BASICA", "CDC_BASICA", "COF_PG", "CDC_PG", "COF_DE", "CDC_DE"]
+    elif current_pos == "Meias":
         left_cols = ["COC_AF", "CDF_AF", "COC_CHUTES", "CDF_CHUTES", "COC_PG", "CDF_PG", "COC_BASICA", "CDF_BASICA"]
         center_cols = ["MANDANTE", "VISITANTE"]
         right_cols = ["COF_BASICA", "CDC_BASICA", "COF_PG", "CDC_PG", "COF_CHUTES", "CDC_CHUTES", "COF_AF", "CDC_AF"]
+    elif current_pos == "Atacantes":
+        left_cols = ["COC_PG", "CDF_PG", "COC_CHUTES", "CDF_CHUTES", "COC_BASICA", "CDF_BASICA"]
+        center_cols = ["MANDANTE", "VISITANTE"]
+        right_cols = ["COF_BASICA", "CDC_BASICA", "COF_CHUTES", "CDC_CHUTES", "COF_PG", "CDC_PG"]
     elif current_pos == "Zagueiros":
         # Ordem Zagueiros: SG, DE, CHUTES, PTS, BASICA
         left_cols = ["COC_SG", "CDF_SG", "COC_DE", "CDF_DE", "COC_CHUTES", "CDF_CHUTES", "COC_PTS", "CDF_PTS", "COC_BASICA", "CDF_BASICA"]
@@ -371,7 +390,10 @@ if "results_df" in st.session_state:
                 
                 # Selecionar Renderer Correto
                 if current_pos == "Meias":
-                    fig = renderer.render_meias_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
+                    if st.session_state.get("results_subtype") == "VOLANTE":
+                        fig = renderer.render_volantes_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
+                    else:
+                        fig = renderer.render_meias_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
                 elif current_pos == "Zagueiros":
                     fig = renderer.render_zagueiros_table(df_to_render, rodada_alvo, window_n, tipo_filtro, exibir_legenda=False)
                 elif current_pos == "Goleiros":
@@ -475,14 +497,107 @@ if "results_df" in st.session_state:
                 import traceback
                 st.text(traceback.format_exc())
 
+    # Concentração por jogador: traduz o destaque coletivo para nomes utilizáveis.
+    if current_pos in {"Meias", "Atacantes", "Zagueiros", "Laterais"}:
+        subtype = st.session_state.get("results_subtype")
+        concentration_position = (
+            "VOLANTES" if current_pos == "Meias" and subtype == "VOLANTE"
+            else "MEIAS" if current_pos == "Meias"
+            else current_pos.upper()
+        )
+        with st.expander("Quem concentra os scouts?", expanded=False):
+            st.caption(
+                "Mostra os três jogadores com maior participação em cada scout "
+                "nos mesmos jogos e no mesmo mando usados pela tabela."
+            )
+            concentration_rows = []
+            for _, confrontation in st.session_state["results_df"].iterrows():
+                for team, mando, prefix in ((confrontation["MANDANTE"], "CASA", "COC"),
+                                            (confrontation["VISITANTE"], "FORA", "COF")):
+                    context = None if tipo_filtro == "TODOS" else mando
+                    detail = engine.get_player_concentration(
+                        team=team,
+                        position=concentration_position,
+                        window_n=window_n,
+                        mando_filter=context,
+                        date_cutoff=data_corte,
+                    )
+                    if not detail.empty:
+                        def scout_is_highlighted(scout):
+                            if concentration_position == "LATERAIS":
+                                cols = [f"{prefix}_LE_{scout}", f"{prefix}_LD_{scout}"]
+                            elif concentration_position == "ZAGUEIROS" and scout == "CHUTES":
+                                cols = [f"{prefix}_CHUTES_INDIV"]
+                            else:
+                                cols = [f"{prefix}_{scout}"]
+                            return any(
+                                col in confrontation.index
+                                and classify(concentration_position, col, confrontation[col], window_n) is not None
+                                for col in cols
+                            )
 
-# --- VALIDACAO PERFIS DE GOLEIROS ---
+                        detail = detail[detail["SCOUT"].map(scout_is_highlighted)]
+                        if not detail.empty:
+                            concentration_rows.append(detail)
+            if concentration_rows:
+                concentration_df = pd.concat(concentration_rows, ignore_index=True)
+                leaders = concentration_df[concentration_df["RANK"].eq(1)].copy()
+                leaders["PARTICIPACAO"] = (leaders["PARTICIPACAO"] * 100).round().astype(int).astype(str) + "%"
+                leaders = leaders.rename(columns={
+                    "NOME": "JOGADOR", "TOTAL": "TOTAL NO RECORTE",
+                    "PARTICIPACAO": "% DA POSIÇÃO", "JOGOS": "JOGOS",
+                    "CONCENTRACAO": "CONCENTRAÇÃO",
+                })
+                st.dataframe(
+                    leaders[["TIME", "SCOUT", "JOGADOR", "TOTAL NO RECORTE", "% DA POSIÇÃO", "CONCENTRAÇÃO", "JOGOS"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                context_rows = []
+                mando_by_team = {
+                    str(r["MANDANTE"]): "CASA"
+                    for _, r in st.session_state["results_df"].iterrows()
+                } | {
+                    str(r["VISITANTE"]): "FORA"
+                    for _, r in st.session_state["results_df"].iterrows()
+                }
+                for _, leader in leaders.iterrows():
+                    context = engine.get_team_scout_context(
+                        leader["TIME"], concentration_position, leader["SCOUT"],
+                        mando_by_team.get(leader["TIME"]), data_corte,
+                    )
+                    if context:
+                        context_rows.append(context)
+                if context_rows:
+                    st.markdown("**Lastro do destaque**")
+                    context_df = pd.DataFrame(context_rows).drop_duplicates(["TIME", "SCOUT"])
+                    context_df["LEITURA"] = context_df["STATUS"].map({
+                        "CONFIRMADO_5_E_10": "Também aparece em 5 e 10 jogos",
+                        "CONFIRMADO_5": "Também aparece em 5 jogos",
+                        "CRESCIMENTO_RECENTE": "Cresceu nos jogos recentes",
+                        "RECENTE_SEM_LASTRO": "Destaque recente, ainda sem lastro maior",
+                    })
+                    st.dataframe(
+                        context_df[["TIME", "SCOUT", "LEITURA"]],
+                        use_container_width=True, hide_index=True,
+                    )
+                csv_concentration = concentration_df.to_csv(index=False).encode("utf-8-sig")
+                st.download_button(
+                    "Baixar concentração completa (top 3)",
+                    csv_concentration,
+                    f"concentracao_{concentration_position.lower()}_rodada_{rodada_alvo}.csv",
+                    "text/csv",
+                )
+            else:
+                st.info("Nenhum scout próprio destacado exigiu análise de concentração neste recorte.")
+
+
+# --- DETALHES DOS PERFIS DE GOLEIROS ---
 if "results_df" in st.session_state and st.session_state.get("results_key") == "Goleiros":
     st.divider()
-    with st.expander("Validacao - Perfis de Goleiros", expanded=False):
+    with st.expander("Detalhes dos perfis de goleiros", expanded=False):
         st.caption(
-            "Tabela de validacao temporaria. Mostra os indices e perfis calculados "
-            "para cada goleiro antes de qualquer mudanca no layout visual."
+            "Mostra separadamente a leitura de defesas e SG usada no perfil visual."
         )
         df_gol_raw = st.session_state["results_df"]
         perfil_rows = []
@@ -517,7 +632,9 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
             st.info("Nenhum dado de goleiros disponivel para calcular perfis.")
 
 # --- LEGENDA AUTOMÁTICA — MEIAS ---
-if "results_df" in st.session_state and st.session_state.get("results_key") == "Meias":
+if ("results_df" in st.session_state
+        and st.session_state.get("results_key") == "Meias"
+        and st.session_state.get("results_subtype") != "VOLANTE"):
     st.divider()
     st.subheader("📋 Legenda automática — Meias")
     st.caption("Destaques por PASSE P/ FINALIZ., FINALIZAÇÕES, G + A e MÉDIA BÁSICA. Cole no Telegram e envie — o negrito aparece automaticamente.")
@@ -561,6 +678,26 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
 
     except Exception as _mei_cap_err:
         st.warning(f"Não foi possível gerar a legenda de meias: {_mei_cap_err}")
+
+if ("results_df" in st.session_state
+        and st.session_state.get("results_key") == "Meias"
+        and st.session_state.get("results_subtype") == "VOLANTE"):
+    st.divider()
+    st.subheader("Legenda automática — Volantes")
+    try:
+        rows_vol = st.session_state["results_df"].to_dict(orient="records")
+        vol_plain = generate_volantes_caption_plain(rows_vol, rodada_alvo, window_n)
+        vol_html = generate_volantes_caption_html(rows_vol, rodada_alvo, window_n)
+        vol_tg = generate_volantes_caption_telegram_md(rows_vol, rodada_alvo, window_n)
+        st.markdown(vol_html, unsafe_allow_html=True)
+        if st.button("Copiar Volantes para Telegram", key="btn_copy_legenda_vol", type="primary"):
+            _ok, _err = copy_text_to_clipboard(vol_tg)
+            st.session_state["_legenda_vol_copy_status"] = "ok" if _ok else _err
+        _show_copy_status(st.session_state.get("_legenda_vol_copy_status", ""), vol_tg)
+        with st.expander("Texto puro — Volantes"):
+            st.text_area("", vol_plain, height=300, key="caption_vol_plain_area")
+    except Exception as _vol_err:
+        st.warning(f"Não foi possível gerar a legenda de volantes: {_vol_err}")
 
 # --- LEGENDA AUTOMÁTICA — ATACANTES ---
 if "results_df" in st.session_state and st.session_state.get("results_key") == "Atacantes":

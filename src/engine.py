@@ -124,6 +124,7 @@ class CartolaEngine:
              if col not in df.columns: df[col] = 0
              
         df["CHUTES"] = df["FF"] + df["FD"] + df["FT"]
+        df["DE"] = df["DS"] if "DS" in df.columns else 0
         
         if "BASICA" not in df.columns:
              df["BASICA"] = df["PONTOS"]
@@ -166,6 +167,7 @@ class CartolaEngine:
             "PG": "sum",
             "CHUTES": "sum",
             "AF": "sum",
+            "DE": "sum",
             "BASICA": "mean", # Média dos meias que jogaram
             "DATA": "first"
         }).sort_values("DATA")
@@ -178,12 +180,13 @@ class CartolaEngine:
             slice_stats = game_stats
             
         if len(slice_stats) == 0:
-            return {k: 0 for k in ["PG", "CHUTES", "AF", "BASICA"]}
+            return {k: 0 for k in ["PG", "CHUTES", "AF", "DE", "BASICA"]}
             
         return {
             "PG": slice_stats["PG"].sum(), # Soma na janela! (Documento: 'Método: SOMA')
             "CHUTES": slice_stats["CHUTES"].sum(), # SOMA
             "AF": slice_stats["AF"].sum(), # SOMA
+            "DE": slice_stats["DE"].sum(), # SOMA
             "BASICA": slice_stats["BASICA"].mean() # MÉDIA na janela
         }
 
@@ -282,13 +285,13 @@ class CartolaEngine:
             "MANDANTE": mandante,
             "VISITANTE": visitante,
             # COC
-            "COC_PG": coc["PG"], "COC_CHUTES": coc["CHUTES"], "COC_AF": coc["AF"], "COC_BASICA": coc["BASICA"],
+            "COC_PG": coc["PG"], "COC_CHUTES": coc["CHUTES"], "COC_AF": coc["AF"], "COC_DE": coc["DE"], "COC_BASICA": coc["BASICA"],
             # CDF
-            "CDF_PG": cdf["PG"], "CDF_CHUTES": cdf["CHUTES"], "CDF_AF": cdf["AF"], "CDF_BASICA": cdf["BASICA"],
+            "CDF_PG": cdf["PG"], "CDF_CHUTES": cdf["CHUTES"], "CDF_AF": cdf["AF"], "CDF_DE": cdf["DE"], "CDF_BASICA": cdf["BASICA"],
             # COF
-            "COF_PG": cof["PG"], "COF_CHUTES": cof["CHUTES"], "COF_AF": cof["AF"], "COF_BASICA": cof["BASICA"],
+            "COF_PG": cof["PG"], "COF_CHUTES": cof["CHUTES"], "COF_AF": cof["AF"], "COF_DE": cof["DE"], "COF_BASICA": cof["BASICA"],
             # CDC
-            "CDC_PG": cdc["PG"], "CDC_CHUTES": cdc["CHUTES"], "CDC_AF": cdc["AF"], "CDC_BASICA": cdc["BASICA"],
+            "CDC_PG": cdc["PG"], "CDC_CHUTES": cdc["CHUTES"], "CDC_AF": cdc["AF"], "CDC_DE": cdc["DE"], "CDC_BASICA": cdc["BASICA"],
         }
 
     def get_audit_trace(self, df_raw, window_n, time_filter=None, mando_filter=None):
@@ -322,6 +325,123 @@ class CartolaEngine:
             slice_stats = game_stats
             
         return slice_stats
+
+    def get_player_concentration(self, team, position, window_n=3,
+                                 mando_filter=None, date_cutoff=None):
+        """Concentração dos scouts no jogador dentro da janela da tabela."""
+        pos = str(position).upper()
+        if pos in {"MEIAS", "VOLANTES", "ATACANTES"}:
+            mv = {"MEIAS": "MEIA", "VOLANTES": "VOLANTE", "ATACANTES": "ATACANTE"}[pos]
+            df = self.get_meias_stats_raw(date_cutoff, mv_filter=mv)
+            metrics = {
+                "MEIAS": ["AF", "CHUTES", "PG"],
+                "VOLANTES": ["DE", "PG"],
+                "ATACANTES": ["CHUTES", "PG"],
+            }[pos]
+        elif pos == "ZAGUEIROS":
+            df = self.get_zagueiros_stats_raw(date_cutoff)
+            metrics = ["DE", "CHUTES"]
+        elif pos == "LATERAIS":
+            raw = self.df_pj.copy()
+            if date_cutoff is not None:
+                raw = raw[raw["DATA"] < pd.to_datetime(date_cutoff)]
+            real = pd.to_numeric(raw.get("POS_REAL"), errors="coerce")
+            df = raw[real.round(1).isin([2.2, 2.6])].copy()
+            df["DE"] = pd.to_numeric(df.get("DS", 0), errors="coerce").fillna(0)
+            df["PG"] = pd.to_numeric(df.get("G", 0), errors="coerce").fillna(0) + pd.to_numeric(df.get("A", 0), errors="coerce").fillna(0)
+            metrics = ["DE", "PG"]
+        else:
+            return pd.DataFrame()
+
+        df = df[df["TIME"].eq(team)].copy()
+        if mando_filter in {"CASA", "FORA"}:
+            df = df[df["MANDO"].eq(mando_filter)]
+        match_dates = df.groupby("MATCH_ID")["DATA"].first().sort_values().tail(window_n)
+        df = df[df["MATCH_ID"].isin(match_dates.index)].copy()
+        if df.empty:
+            return pd.DataFrame()
+
+        records = []
+        for metric in metrics:
+            if metric not in df.columns:
+                continue
+            values = pd.to_numeric(df[metric], errors="coerce").fillna(0)
+            work = df.assign(_VALUE=values)
+            players = work.groupby("NOME", as_index=False).agg(
+                TOTAL=("_VALUE", "sum"),
+                JOGOS=("MATCH_ID", "nunique"),
+            )
+            players = players[players["TOTAL"].gt(0)].sort_values(
+                ["TOTAL", "JOGOS", "NOME"], ascending=[False, False, True]
+            )
+            total = players["TOTAL"].sum()
+            if total <= 0:
+                continue
+            players["PARTICIPACAO"] = players["TOTAL"] / total
+            players["CONCENTRACAO"] = pd.cut(
+                players["PARTICIPACAO"],
+                bins=[-np.inf, 0.35, 0.50, np.inf],
+                labels=["DISTRIBUIDA", "RELEVANTE", "ALTA"],
+                right=False,
+            ).astype(str)
+            players["TIME"] = team
+            players["POSICAO"] = pos
+            players["SCOUT"] = metric
+            players["RANK"] = range(1, len(players) + 1)
+            records.append(players.head(3))
+        if not records:
+            return pd.DataFrame()
+        return pd.concat(records, ignore_index=True)[
+            ["TIME", "POSICAO", "SCOUT", "RANK", "NOME", "TOTAL", "PARTICIPACAO", "CONCENTRACAO", "JOGOS"]
+        ]
+
+    def get_team_scout_context(self, team, position, metric, mando, date_cutoff=None):
+        """Compara o recorte principal de 3 por mando com 5 e 10 gerais."""
+        pos = str(position).upper()
+        metric = str(metric).upper()
+        if pos in {"MEIAS", "VOLANTES", "ATACANTES"}:
+            mv = {"MEIAS": "MEIA", "VOLANTES": "VOLANTE", "ATACANTES": "ATACANTE"}[pos]
+            df = self.get_meias_stats_raw(date_cutoff, mv_filter=mv)
+        elif pos == "ZAGUEIROS":
+            df = self.get_zagueiros_stats_raw(date_cutoff)
+        elif pos == "LATERAIS":
+            raw = self.df_pj.copy()
+            if date_cutoff is not None:
+                raw = raw[raw["DATA"] < pd.to_datetime(date_cutoff)]
+            real = pd.to_numeric(raw.get("POS_REAL"), errors="coerce")
+            df = raw[real.round(1).isin([2.2, 2.6])].copy()
+            df["DE"] = pd.to_numeric(df.get("DS", 0), errors="coerce").fillna(0)
+            df["PG"] = pd.to_numeric(df.get("G", 0), errors="coerce").fillna(0) + pd.to_numeric(df.get("A", 0), errors="coerce").fillna(0)
+        else:
+            return None
+        if metric not in df.columns:
+            return None
+        df = df[df["TIME"].eq(team)].copy()
+        agg = "mean" if metric == "BASICA" else "sum"
+        games = df.groupby(["MATCH_ID", "MANDO"], as_index=False).agg(
+            VALUE=(metric, agg), DATA=("DATA", "first")
+        ).sort_values("DATA")
+        primary = games[games["MANDO"].eq(mando)].tail(3)
+        general5, general10 = games.tail(5), games.tail(10)
+        if len(primary) < 3:
+            return None
+        calc = (lambda frame: frame.VALUE.mean()) if metric == "BASICA" else (lambda frame: frame.VALUE.sum())
+        v3, v5, v10 = calc(primary), calc(general5), calc(general10)
+        # Compara médias por jogo para que janelas diferentes sejam equivalentes.
+        p3 = v3 if metric == "BASICA" else v3 / len(primary)
+        p5 = v5 if metric == "BASICA" else v5 / max(len(general5), 1)
+        p10 = v10 if metric == "BASICA" else v10 / max(len(general10), 1)
+        if p5 >= p3 * 0.85 and p10 >= p3 * 0.75:
+            status = "CONFIRMADO_5_E_10"
+        elif p5 >= p3 * 0.85:
+            status = "CONFIRMADO_5"
+        elif p3 > p5 * 1.20:
+            status = "CRESCIMENTO_RECENTE"
+        else:
+            status = "RECENTE_SEM_LASTRO"
+        return {"TIME": team, "POSICAO": pos, "SCOUT": metric,
+                "RECORTE_3_MANDO": v3, "RECORTE_5_GERAL": v5,
+                "RECORTE_10_GERAL": v10, "STATUS": status}
     
     # --- ZAGUEIROS ENGINE ---
     def get_zagueiros_stats_raw(self, date_cutoff=None):
@@ -333,11 +453,6 @@ class CartolaEngine:
         target_ids = config.POS_IDS["ZAGUEIRO"] # ["3", "3.0"]
         mask = self.df_pj["POSICAO"].astype(str).isin(target_ids)
         df = self.df_pj[mask].copy()
-        
-        print(f"DEBUG: get_zagueiros_stats_raw - Total Rows: {len(self.df_pj)} | Zagueiros Found: {len(df)}")
-        if len(df) == 0:
-             print(f"DEBUG: No Zagueiros found! Unique POSICAO values: {self.df_pj['POSICAO'].unique()}")
-        
         
         # 2. Filtro de Data
         if date_cutoff:
@@ -398,12 +513,19 @@ class CartolaEngine:
             slice_stats = game_stats
             
         if len(slice_stats) == 0:
-            return {k: 0 for k in ["SG", "DE", "CHUTES", "PONTOS", "BASICA"]}
+            return {k: 0 for k in ["SG", "DE", "CHUTES", "CHUTES_INDIV", "PONTOS", "BASICA"]} | {"CHUTES_JOGADOR": ""}
+
+        selected = df[df["MATCH_ID"].isin(slice_stats["MATCH_ID"])]
+        individual = selected.groupby("NOME")["CHUTES"].sum().sort_values(ascending=False)
+        max_chutes = float(individual.iloc[0]) if not individual.empty else 0
+        max_jogador = str(individual.index[0]) if not individual.empty else ""
             
         return {
             "SG": int(slice_stats["SG"].sum()),      # Soma de jogos com SG
             "DE": slice_stats["DE"].sum(),           # Soma
             "CHUTES": slice_stats["CHUTES"].sum(),   # Soma
+            "CHUTES_INDIV": max_chutes,
+            "CHUTES_JOGADOR": max_jogador,
             "PONTOS": slice_stats["PONTOS"].mean(),  # Média das médias
             "BASICA": slice_stats["BASICA"].mean()   # Média das médias
         }
@@ -459,13 +581,13 @@ class CartolaEngine:
         return {
             "MANDANTE": mandante, "VISITANTE": visitante,
             # COC
-            "COC_SG": coc["SG"], "COC_DE": coc["DE"], "COC_CHUTES": coc["CHUTES"], "COC_PTS": coc["PONTOS"], "COC_BASICA": coc["BASICA"],
+            "COC_SG": coc["SG"], "COC_DE": coc["DE"], "COC_CHUTES": coc["CHUTES"], "COC_CHUTES_INDIV": coc["CHUTES_INDIV"], "COC_CHUTES_JOGADOR": coc["CHUTES_JOGADOR"], "COC_PTS": coc["PONTOS"], "COC_BASICA": coc["BASICA"],
             # CDF
-            "CDF_SG": cdf["SG"], "CDF_DE": cdf["DE"], "CDF_CHUTES": cdf["CHUTES"], "CDF_PTS": cdf["PONTOS"], "CDF_BASICA": cdf["BASICA"],
+            "CDF_SG": cdf["SG"], "CDF_DE": cdf["DE"], "CDF_CHUTES": cdf["CHUTES"], "CDF_CHUTES_INDIV": cdf["CHUTES_INDIV"], "CDF_CHUTES_JOGADOR": cdf["CHUTES_JOGADOR"], "CDF_PTS": cdf["PONTOS"], "CDF_BASICA": cdf["BASICA"],
             # COF
-            "COF_SG": cof["SG"], "COF_DE": cof["DE"], "COF_CHUTES": cof["CHUTES"], "COF_PTS": cof["PONTOS"], "COF_BASICA": cof["BASICA"],
+            "COF_SG": cof["SG"], "COF_DE": cof["DE"], "COF_CHUTES": cof["CHUTES"], "COF_CHUTES_INDIV": cof["CHUTES_INDIV"], "COF_CHUTES_JOGADOR": cof["CHUTES_JOGADOR"], "COF_PTS": cof["PONTOS"], "COF_BASICA": cof["BASICA"],
             # CDC
-            "CDC_SG": cdc["SG"], "CDC_DE": cdc["DE"], "CDC_CHUTES": cdc["CHUTES"], "CDC_PTS": cdc["PONTOS"], "CDC_BASICA": cdc["BASICA"]
+            "CDC_SG": cdc["SG"], "CDC_DE": cdc["DE"], "CDC_CHUTES": cdc["CHUTES"], "CDC_CHUTES_INDIV": cdc["CHUTES_INDIV"], "CDC_CHUTES_JOGADOR": cdc["CHUTES_JOGADOR"], "CDC_PTS": cdc["PONTOS"], "CDC_BASICA": cdc["BASICA"]
         }
     def get_team_offensive_stats(self, team, window_n, mando_filter=None):
         """
@@ -658,6 +780,7 @@ class CartolaEngine:
         return {
             "MANDANTE": mandante,
             "VISITANTE": visitante,
+            "_WINDOW_N": window_n,
             
             # --- MANDANTE SIDE (Left Panel - Analisando Goleiro MANDANTE) ---
             # AMEACAS: Chutes do Visitante (COF) e Sofridos pelo Mandante (CDC)
@@ -898,7 +1021,7 @@ class CartolaEngine:
         uma lista com dois dicts (mandante, visitante).
         Nao altera nenhuma logica visual nem de renderizacao.
 
-        Perfis possiveis: SG+DE, SG, DE, BOMB, -
+        Os caminhos de defesas e SG são classificados de forma independente.
         """
         def safe(val):
             try:
@@ -906,60 +1029,46 @@ class CartolaEngine:
             except (TypeError, ValueError):
                 return 0.0
 
-        def classify_profile(sg_idx, pressao_idx, defesas_idx, risco_idx,
-                             gols_rival, gols_time_cedeu,
-                             chute_pm_rival, chute_pm_time_cedeu,
-                             defesas_time, defesas_rival_cedeu):
+        window_n = max(int(safe(gol_row.get("_WINDOW_N", 3))), 1)
+        factor = window_n / 3.0
 
-            # --- BLOQUEIO_POSITIVO_FORTE ---
-            # Verdadeiro quando o risco eh realmente dominante (bloqueia perfis positivos)
-            bloqueio = (
-                risco_idx >= 5
-                or (gols_rival >= 6 and chute_pm_rival < 3)
-                or (gols_time_cedeu >= 5 and chute_pm_time_cedeu < 4)
-                or (gols_rival >= 5 and gols_time_cedeu >= 4)
-            )
+        def scaled(value):
+            return value * factor
 
-            # --- DEFESA_ROBUSTA ---
-            # Verdadeiro quando ha sustentacao real de defesas (nao apenas media no limite)
-            defesa_robusta = (
-                defesas_idx >= 11
-                or (defesas_time >= 12 and defesas_rival_cedeu >= 8)
-                or (defesas_rival_cedeu >= 12 and defesas_time >= 8)
-                or (defesas_time >= 10 and defesas_rival_cedeu >= 10)
-                or (defesas_idx >= 10 and pressao_idx >= 15)
-            )
-
-            # Regra 1: SG+DE (prioridade maxima)
-            if (sg_idx >= 3 and defesas_idx >= 6
-                    and risco_idx < 5 and pressao_idx < 17
-                    and not bloqueio):
-                return "SG+DE"
-
-            # Regra 2: SG
-            if (sg_idx >= 3 and defesas_idx < 6
-                    and risco_idx < 5
-                    and not bloqueio):
-                return "SG"
-
-            # Regra 3: DE (exige DEFESA_ROBUSTA + pressao minima + sem bloqueio)
-            if (sg_idx < 3 and risco_idx < 5
-                    and pressao_idx >= 12
-                    and defesa_robusta
-                    and not bloqueio):
-                return "DE"
-
-            # Regra 4: BOMB
-            if sg_idx < 3 and (
-                (risco_idx >= 5 and (defesas_idx >= 6 or pressao_idx >= 15))
-                or (gols_rival >= 5 and chute_pm_rival < 4
-                    and (pressao_idx >= 10 or defesas_idx >= 6))
-                or (gols_time_cedeu >= 5 and chute_pm_time_cedeu < 4
-                    and (pressao_idx >= 10 or defesas_idx >= 6))
-            ):
-                return "BOMB"
-
+        def defense_level(own_saves, opponent_sot):
+            # Ambos precisam confirmar a oportunidade. Volume de um lado só não basta.
+            if own_saves >= scaled(12) and opponent_sot >= scaled(12):
+                return "FORTE"
+            if own_saves >= scaled(11) and opponent_sot >= scaled(12):
+                return "BOM"
+            if own_saves >= scaled(10) and opponent_sot >= scaled(10):
+                return "SINAL"
             return "-"
+
+        def sg_level(own_sg, opponent_blanks, opponent_goals):
+            # SG é um caminho defensivo; pressão para defesas não interfere aqui.
+            if own_sg >= scaled(2) and opponent_goals <= scaled(4):
+                return "FORTE"
+            if (own_sg >= scaled(1) and opponent_blanks >= scaled(1)
+                    and opponent_goals <= scaled(3)):
+                return "BOM"
+            if own_sg >= scaled(1) and opponent_goals <= scaled(4):
+                return "SINAL"
+            return "-"
+
+        def synthesize(def_level, sg_level, opponent_goals, own_goals_conceded):
+            has_def = def_level != "-"
+            has_sg = sg_level != "-"
+            if has_def and has_sg:
+                return "AMBOS"
+            if has_def:
+                return "DEFESAS"
+            if has_sg:
+                return "SG"
+            # Sem sinal positivo, a célula precisa comunicar risco claramente.
+            if opponent_goals >= scaled(5) and own_goals_conceded >= scaled(4):
+                return "ALTO_RISCO"
+            return "RISCO"
 
         mandante = gol_row.get("MANDANTE", "")
         visitante = gol_row.get("VISITANTE", "")
@@ -983,6 +1092,12 @@ class CartolaEngine:
         man_pm_tc           = safe(gol_row.get("CDC_CHUTES_PM", 0))
         man_defesas_time    = safe(gol_row.get("COC_DE", 0))
         man_defesas_rival   = safe(gol_row.get("CDF_DE", 0))
+        man_def_level = defense_level(man_defesas_time, safe(gol_row.get("COF_CHUTES_AG", 0)))
+        man_sg_level = sg_level(
+            safe(gol_row.get("COC_SG", 0)),
+            safe(gol_row.get("CDF_SG", 0)),
+            safe(gol_row.get("COF_GOLS", 0)),
+        )
 
         # --- Indices do VISITANTE ---
         # SG_INDEX = COF_SG (SG do visitante fora) + CDC_SG (SG cedido pelo mandante em casa)
@@ -1002,6 +1117,12 @@ class CartolaEngine:
         vis_pm_tc           = safe(gol_row.get("CDF_CHUTES_PM", 0))
         vis_defesas_time    = safe(gol_row.get("COF_DE", 0))
         vis_defesas_rival   = safe(gol_row.get("CDC_DE", 0))
+        vis_def_level = defense_level(vis_defesas_time, safe(gol_row.get("COC_CHUTES_AG", 0)))
+        vis_sg_level = sg_level(
+            safe(gol_row.get("COF_SG", 0)),
+            safe(gol_row.get("CDC_SG", 0)),
+            safe(gol_row.get("COC_GOLS", 0)),
+        )
 
         return [
             {
@@ -1013,12 +1134,9 @@ class CartolaEngine:
                 "DEFESAS_INDEX": man_defesas,
                 "RISCO_INDEX": man_risco,
                 "CHUTE_PM_CRUZADO": man_chute_pm,
-                "PERFIL": classify_profile(
-                    man_sg, man_pressao, man_defesas, man_risco,
-                    man_gols_rival, man_gols_tc,
-                    man_pm_rival, man_pm_tc,
-                    man_defesas_time, man_defesas_rival,
-                ),
+                "DEFESAS_NIVEL": man_def_level,
+                "SG_NIVEL": man_sg_level,
+                "PERFIL": synthesize(man_def_level, man_sg_level, man_gols_rival, man_gols_tc),
             },
             {
                 "JOGO": jogo,
@@ -1029,11 +1147,8 @@ class CartolaEngine:
                 "DEFESAS_INDEX": vis_defesas,
                 "RISCO_INDEX": vis_risco,
                 "CHUTE_PM_CRUZADO": vis_chute_pm,
-                "PERFIL": classify_profile(
-                    vis_sg, vis_pressao, vis_defesas, vis_risco,
-                    vis_gols_rival, vis_gols_tc,
-                    vis_pm_rival, vis_pm_tc,
-                    vis_defesas_time, vis_defesas_rival,
-                ),
+                "DEFESAS_NIVEL": vis_def_level,
+                "SG_NIVEL": vis_sg_level,
+                "PERFIL": synthesize(vis_def_level, vis_sg_level, vis_gols_rival, vis_gols_tc),
             },
         ]

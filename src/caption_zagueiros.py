@@ -175,11 +175,7 @@ def _qualifies_des(des_t: float, des_c: float) -> bool:
     2. Cruzamento equilibrado forte:    DES_TIME >= 9  E DES_CED >= 9
     3. Adversário cede muito + base:    DES_TIME >= 8  E DES_CED >= 12
     """
-    return (
-        des_t >= 12
-        or (des_t >= 9 and des_c >= 9)
-        or (des_t >= 8 and des_c >= 12)
-    )
+    return des_t >= 9
 
 
 def _qualifies_fin(fin_t: float, fin_c: float) -> bool:
@@ -189,11 +185,7 @@ def _qualifies_fin(fin_t: float, fin_c: float) -> bool:
     2. Cruzamento equilibrado forte:    FIN_TIME >= 4  E FIN_CED >= 4
     3. Adversário cede muito + base:    FIN_TIME >= 3  E FIN_CED >= 7
     """
-    return (
-        fin_t >= 5
-        or (fin_t >= 4 and fin_c >= 4)
-        or (fin_t >= 3 and fin_c >= 7)
-    )
+    return False
 
 
 def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
@@ -209,11 +201,7 @@ def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
     """
     t = round_1(bas_t)
     c = round_1(bas_c)
-    return (
-        t >= 2.7
-        or (t >= 2.4 and c >= 2.4)
-        or (t >= 2.0 and c >= 3.0)
-    )
+    return False
 
 
 # ============================================================
@@ -261,25 +249,27 @@ def _sentence_des(
 
 def _sentence_fin(
     article: str,
+    jogador: str,
     fin_t: int,
     fin_c: int,
     mando_txt: str,
+    window_n: int,
     wrap,
 ) -> str:
     b         = _make_bold(wrap)
-    nome      = b(f"Os zagueiros {article}")
+    nome      = b(jogador.title()) if jogador else b(f"Um zagueiro {article}")
     fin_t_fmt = b(format_finalizacoes(fin_t))
     fin_c_fmt = b(format_finalizacoes(fin_c))
 
     # Produção própria como único driver (fin_c não alcança limiar cruzamento)
-    if fin_t >= 5 and fin_c < 4:
+    if fin_c < 3 * max(window_n, 1) / 3:
         return (
-            f"{nome} somaram {fin_t_fmt} nos últimos 3 jogos {mando_txt}."
+            f"{nome} fez {fin_t_fmt} nos últimos {window_n} jogos {mando_txt}."
         )
     # Cruzamento: adversário também é fator relevante
     return (
-        f"{nome} somaram {fin_t_fmt} nos últimos 3 jogos {mando_txt}, "
-        f"e o adversário cedeu {fin_c_fmt} para zagueiros rivais."
+        f"{nome} fez {fin_t_fmt} nos últimos {window_n} jogos {mando_txt}. "
+        f"O adversário cedeu até {fin_c_fmt} a um mesmo zagueiro."
     )
 
 
@@ -288,6 +278,7 @@ def _sentence_bas(
     bas_t: float,
     bas_c: float,
     mando_txt: str,
+    window_n: int,
     wrap,
 ) -> str:
     b         = _make_bold(wrap)
@@ -302,7 +293,7 @@ def _sentence_bas(
     # Produção própria como único driver (bas_c não alcança limiar cruzamento)
     if t >= 2.7 and c < 2.4:
         return (
-            f"{nome} têm média básica de {bas_t_fmt} nos últimos 3 jogos {mando_txt}."
+            f"{nome} têm média básica de {bas_t_fmt} nos últimos {window_n} jogos {mando_txt}."
         )
     # Cruzamento: adversário também é fator relevante
     return (
@@ -317,12 +308,12 @@ def _sentence_bas(
 
 # (equipe_key, col_sg_t, col_sg_c, col_des_t, col_des_c, col_fin_t, col_fin_c, col_bas_t, col_bas_c)
 _POSICOES = [
-    ("MANDANTE", "COC_SG", "CDF_SG", "COC_DE", "CDF_DE", "COC_CHUTES", "CDF_CHUTES", "COC_BASICA", "CDF_BASICA"),
-    ("VISITANTE", "COF_SG", "CDC_SG", "COF_DE", "CDC_DE", "COF_CHUTES", "CDC_CHUTES", "COF_BASICA", "CDC_BASICA"),
+    ("MANDANTE", "COC_SG", "CDF_SG", "COC_DE", "CDF_DE", "COC_CHUTES_INDIV", "CDF_CHUTES_INDIV", "COC_CHUTES_JOGADOR", "COC_BASICA", "CDF_BASICA"),
+    ("VISITANTE", "COF_SG", "CDC_SG", "COF_DE", "CDC_DE", "COF_CHUTES_INDIV", "CDC_CHUTES_INDIV", "COF_CHUTES_JOGADOR", "COF_BASICA", "CDC_BASICA"),
 ]
 
 
-def _collect_candidates(rows: list) -> dict:
+def _collect_candidates(rows: list, window_n: int = 3) -> dict:
     """Percorre todas as linhas e separa candidatos por bloco.
 
     Retorna {'sg': [...], 'des': [...], 'fin': [...], 'bas': [...]}.
@@ -335,7 +326,7 @@ def _collect_candidates(rows: list) -> dict:
         man = str(row.get("MANDANTE", "")).strip()
         vis = str(row.get("VISITANTE", "")).strip()
 
-        for (equipe_key, c_sg_t, c_sg_c, c_des_t, c_des_c, c_fin_t, c_fin_c, c_bas_t, c_bas_c) in _POSICOES:
+        for (equipe_key, c_sg_t, c_sg_c, c_des_t, c_des_c, c_fin_t, c_fin_c, c_fin_player, c_bas_t, c_bas_c) in _POSICOES:
             time = man if equipe_key == "MANDANTE" else vis
             if not time:
                 continue
@@ -346,6 +337,7 @@ def _collect_candidates(rows: list) -> dict:
             des_c = _safe(row, c_des_c)
             fin_t = _safe(row, c_fin_t)
             fin_c = _safe(row, c_fin_c)
+            fin_player = str(row.get(c_fin_player, "") or "").strip()
             bas_t = _safe(row, c_bas_t)
             bas_c = _safe(row, c_bas_c)
 
@@ -355,16 +347,16 @@ def _collect_candidates(rows: list) -> dict:
                 "sg_t":  sg_t,  "sg_c":  sg_c,
                 "des_t": des_t, "des_c": des_c,
                 "fin_t": fin_t, "fin_c": fin_c,
+                "fin_player": fin_player,
                 "bas_t": bas_t, "bas_c": bas_c,
             }
 
-            if _qualifies_sg(sg_t):
-                sg_list.append(entry)
-            if _qualifies_des(des_t, des_c):
+            factor = max(window_n, 1) / 3
+            if des_t >= 14 * factor or (des_t >= 11 * factor and des_c >= 11 * factor):
                 des_list.append(entry)
-            if _qualifies_fin(fin_t, fin_c):
+            if fin_t >= 5 * factor or (fin_t >= 4 * factor and fin_c >= 4 * factor):
                 fin_list.append(entry)
-            if _qualifies_bas(bas_t, bas_c):
+            if round_1(bas_t) >= 3.5 or (round_1(bas_t) >= 3.1 and round_1(bas_c) >= 3.1):
                 bas_list.append(entry)
 
     return {"sg": sg_list, "des": des_list, "fin": fin_list, "bas": bas_list}
@@ -376,7 +368,7 @@ def _collect_candidates(rows: list) -> dict:
 
 def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     b          = _make_bold(wrap)
-    candidates = _collect_candidates(rows)
+    candidates = _collect_candidates(rows, window_n)
     sg_list    = candidates["sg"]
     des_list   = candidates["des"]
     fin_list   = candidates["fin"]
@@ -413,13 +405,11 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         return _sentence_des(article, int(e["des_t"]), int(e["des_c"]), e["mando_txt"], wrap)
 
     def _build_fin(e, article, wrap):
-        return _sentence_fin(article, int(e["fin_t"]), int(e["fin_c"]), e["mando_txt"], wrap)
+        return _sentence_fin(article, e["fin_player"], int(e["fin_t"]), int(e["fin_c"]), e["mando_txt"], window_n, wrap)
 
     def _build_bas(e, article, wrap):
-        return _sentence_bas(article, e["bas_t"], e["bas_c"], e["mando_txt"], wrap)
+        return _sentence_bas(article, e["bas_t"], e["bas_c"], e["mando_txt"], window_n, wrap)
 
-    if sg_list:
-        lines += _bloco("🛡️ ZAGUEIROS PARA SG", sg_list, _build_sg)
     if des_list:
         lines += _bloco("🧱 ZAGUEIROS PARA DESARMES", des_list, _build_des)
     if fin_list:
