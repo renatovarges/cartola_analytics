@@ -2,10 +2,13 @@ import unittest
 
 import pandas as pd
 
-from src.cartola_lineups import build_lineups, inject_lineups, inject_scout_leaders
+from src.cartola_lineups import build_lineups, inject_lineups, inject_scout_leaders, safe_names
 
 
 class CartolaLineupsTests(unittest.TestCase):
+    def test_nan_name_column_becomes_empty_list(self):
+        self.assertEqual(safe_names(float("nan")), [])
+
     def payload(self):
         return {
             "clubes": {"1": {"slug": "flamengo"}},

@@ -23,6 +23,7 @@ Prefixos das colunas:
 """
 
 from .calibration import caption_qualifies
+from .cartola_lineups import safe_names
 
 # ============================================================
 # DICIONÁRIOS DE ARTIGOS
@@ -283,11 +284,11 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 "a_t": _safe(row, f"{'COC' if equipe_key == 'MANDANTE' else 'COF'}_A"),
                 "bas_t": bas_t, "bas_c": bas_c,
                 "leaders": {
-                    "g": row.get(f"DESTAQUES_{equipe_key}_G", []) or [],
-                    "a": row.get(f"DESTAQUES_{equipe_key}_A", []) or [],
-                    "pg": row.get(f"DESTAQUES_{equipe_key}_PG", []) or [],
-                    "fin": row.get(f"DESTAQUES_{equipe_key}_CHUTES", []) or [],
-                    "bas": row.get(f"DESTAQUES_{equipe_key}_BASICA", []) or [],
+                    "g": safe_names(row.get(f"DESTAQUES_{equipe_key}_G")),
+                    "a": safe_names(row.get(f"DESTAQUES_{equipe_key}_A")),
+                    "pg": safe_names(row.get(f"DESTAQUES_{equipe_key}_PG")),
+                    "fin": safe_names(row.get(f"DESTAQUES_{equipe_key}_CHUTES")),
+                    "bas": safe_names(row.get(f"DESTAQUES_{equipe_key}_BASICA")),
                 },
             }
 

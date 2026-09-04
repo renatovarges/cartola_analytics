@@ -2,6 +2,7 @@
 
 from .caption_meias import _fmt_team, _make_bold, _safe, format_pg, format_pontos
 from .calibration import caption_qualifies
+from .cartola_lineups import safe_names
 
 
 def _generate(rows, rodada, window_n=3, wrap=None):
@@ -28,9 +29,9 @@ def _generate(rows, rodada, window_n=3, wrap=None):
             if scouts:
                 candidates.append({"team": team, "mando": mando, "de": de, "bas": bas,
                     "pg": pg, "scouts": scouts, "leaders": {
-                        "de": row.get(f"DESTAQUES_{team_key}_DE", []) or [],
-                        "bas": row.get(f"DESTAQUES_{team_key}_BASICA", []) or [],
-                        "pg": row.get(f"DESTAQUES_{team_key}_PG", []) or []}})
+                        "de": safe_names(row.get(f"DESTAQUES_{team_key}_DE")),
+                        "bas": safe_names(row.get(f"DESTAQUES_{team_key}_BASICA")),
+                        "pg": safe_names(row.get(f"DESTAQUES_{team_key}_PG"))}})
 
     candidates.sort(key=lambda e: ("de" in e["scouts"], "bas" in e["scouts"],
                                     len(e["scouts"]), e["de"], e["bas"]), reverse=True)

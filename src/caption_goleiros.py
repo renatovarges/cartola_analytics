@@ -1,5 +1,4 @@
-"""
-caption_goleiros.py
+"""caption_goleiros.py
 ===================
 Gerador de legenda textual para a tabela de Goleiros.
 
@@ -15,6 +14,8 @@ Regras de negócio:
 - Máximo de 6 destaques por legenda
 - Nunca usar barra invertida. Nunca gerar 'SG \\+ DEFESAS'.
 """
+
+from .cartola_lineups import safe_names
 
 # ============================================================
 # DICIONÁRIOS DE NOMES E ARTIGOS
@@ -263,7 +264,7 @@ def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None, varia
     article   = format_team_article(time)   # "do Flamengo"
     subject   = format_team_subject(time)   # "O Flamengo"
     mando_txt = "em casa" if mando == "MANDANTE" else "fora"
-    jogadores = row.get(f"JOGADORES_{mando}_GOL", []) or []
+    jogadores = safe_names(row.get(f"JOGADORES_{mando}_GOL"))
     if jogadores:
         subject_gol = " e ".join(jogadores)
     else:

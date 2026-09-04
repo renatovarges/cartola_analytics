@@ -21,6 +21,7 @@ Prefixos das colunas:
 """
 
 from .calibration import caption_qualifies
+from .cartola_lineups import safe_names
 
 # ============================================================
 # DICIONÁRIOS DE ARTIGOS
@@ -319,10 +320,10 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 "pg_t":  pg_t,  "pg_c":  pg_c,
                 "bas_t": bas_t, "bas_c": bas_c,
                 "leaders": {
-                    "pg": row.get(f"DESTAQUES_{equipe_key}_PG", []) or [],
-                    "fin": row.get(f"DESTAQUES_{equipe_key}_CHUTES", []) or [],
-                    "af": row.get(f"DESTAQUES_{equipe_key}_AF", []) or [],
-                    "bas": row.get(f"DESTAQUES_{equipe_key}_BASICA", []) or [],
+                    "pg": safe_names(row.get(f"DESTAQUES_{equipe_key}_PG")),
+                    "fin": safe_names(row.get(f"DESTAQUES_{equipe_key}_CHUTES")),
+                    "af": safe_names(row.get(f"DESTAQUES_{equipe_key}_AF")),
+                    "bas": safe_names(row.get(f"DESTAQUES_{equipe_key}_BASICA")),
                 },
             }
 

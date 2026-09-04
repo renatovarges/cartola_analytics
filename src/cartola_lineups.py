@@ -110,6 +110,19 @@ def player_names(lineups: dict, team: str, role: str) -> list[str]:
     return probable + doubts
 
 
+def safe_names(value) -> list[str]:
+    """Normaliza listas de nomes após passagem por DataFrame.
+
+    Colunas ausentes viram NaN (float) no pandas; elas nunca podem ser
+    percorridas como se fossem uma lista de atletas.
+    """
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
 def inject_lineups(rows: list[dict], lineups: dict) -> list[dict]:
     """Acrescenta nomes às linhas sem alterar métricas estatísticas."""
     for row in rows:

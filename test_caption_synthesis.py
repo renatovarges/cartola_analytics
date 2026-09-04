@@ -44,7 +44,9 @@ class CaptionSynthesisTests(unittest.TestCase):
                "COC_LE_DE": 12, "CDF_LE_DE": 8, "COC_LE_PG": 0, "CDF_LE_PG": 0,
                "COC_LE_BASICA": 4.5, "CDF_LE_BASICA": 3,
                "COC_LD_DE": 11, "CDF_LD_DE": 8, "COC_LD_PG": 0, "CDF_LD_PG": 0,
-               "COC_LD_BASICA": 4.3, "CDF_LD_BASICA": 3}
+               "COC_LD_BASICA": 4.3, "CDF_LD_BASICA": 3,
+               "DESTAQUES_MANDANTE_LE_DE": float("nan"),
+               "DESTAQUES_MANDANTE_LD_DE": float("nan")}
         text = generate_laterais_caption_plain([row], 26, 3)
         self.assertEqual(text.count("Os laterais do Flamengo"), 1)
 

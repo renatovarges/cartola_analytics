@@ -22,6 +22,7 @@ Colunas do engine (prefixos COC/CDF/COF/CDC + posição + scout):
 """
 
 from .calibration import caption_qualifies
+from .cartola_lineups import safe_names
 
 # ============================================================
 # DICIONÁRIOS DE ARTIGOS
@@ -276,9 +277,9 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 "ga_t":  ga_t,  "ga_c":  ga_c,
                 "bas_t": bas_t, "bas_c": bas_c,
                 "leaders": {
-                    "des": row.get(f"DESTAQUES_{equipe_key}_{lado}_DE", []) or [],
-                    "bas": row.get(f"DESTAQUES_{equipe_key}_{lado}_BASICA", []) or [],
-                    "ga": row.get(f"DESTAQUES_{equipe_key}_{lado}_PG", []) or [],
+                    "des": safe_names(row.get(f"DESTAQUES_{equipe_key}_{lado}_DE")),
+                    "bas": safe_names(row.get(f"DESTAQUES_{equipe_key}_{lado}_BASICA")),
+                    "ga": safe_names(row.get(f"DESTAQUES_{equipe_key}_{lado}_PG")),
                 },
             }
 
