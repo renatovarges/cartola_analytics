@@ -418,7 +418,7 @@ def _generate(
     cabecalho = [
         b("ANÁLISE ESTATÍSTICA — GOLEIROS"),
         "",
-        f"Destaques positivos — últimos {window_n} jogos por mando.",
+        f"Seleção revisada — últimos {window_n} jogos por mando.",
     ]
 
     if not entries:

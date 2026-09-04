@@ -8,8 +8,15 @@ import tempfile
 
 # Configuração OBRIGATÓRIA no início
 st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
-APP_VERSION = "2026.09.04-2"
+APP_VERSION = "2026.09.04-3"
 st.caption(f"Versão {APP_VERSION}")
+
+# Resultados guardados pelo Streamlit não podem sobreviver a uma mudança nas
+# regras de seleção: isso faria a tela nova reutilizar perfis calculados antes.
+if st.session_state.get("results_app_version") != APP_VERSION:
+    for _stale_key in ("results_df", "results_key", "results_subtype"):
+        st.session_state.pop(_stale_key, None)
+    st.session_state["results_app_version"] = APP_VERSION
 
 # Adiciona o diretório raiz ao sys.path para permitir "from src.engine ..."
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -329,6 +336,7 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
         st.session_state["results_key"] = macro_pos
         st.session_state["results_df"] = pd.DataFrame(results)
         st.session_state["results_subtype"] = mv_filter_val if macro_pos == "Meias" else None
+        st.session_state["results_app_version"] = APP_VERSION
     else:
         st.warning("Nenhum dado gerado.")
 

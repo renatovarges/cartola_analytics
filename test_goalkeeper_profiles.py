@@ -110,6 +110,7 @@ class GoalkeeperProfileTests(unittest.TestCase):
             self.assertIn(selected, text)
         self.assertNotIn("Ronaldo", text)
         self.assertNotIn("Tiago Volpi", text)
+        self.assertIn("Seleção revisada", text)
 
 
 if __name__ == "__main__":
