@@ -1,9 +1,35 @@
 import unittest
 
-from src.calibration import classify, classify_cell, get_thresholds
+from src.calibration import caption_qualifies, classify, classify_cell, get_thresholds
 
 
 class CalibrationBoundaryTests(unittest.TestCase):
+    def test_caption_decision_uses_color_scale(self):
+        self.assertTrue(caption_qualifies("MEIAS", "PG", 5, 0, 3))
+        self.assertTrue(caption_qualifies("MEIAS", "PG", 3, 3, 3))
+        self.assertFalse(caption_qualifies("MEIAS", "PG", 3, 2, 3))
+
+    def test_caption_window_uses_same_rounding_as_colors(self):
+        self.assertFalse(caption_qualifies("MEIAS", "AF", 14, 14, 5))
+        self.assertTrue(caption_qualifies("MEIAS", "AF", 15, 15, 5))
+
+    def test_attackers_keep_valid_light_crossing(self):
+        self.assertFalse(caption_qualifies("ATACANTES", "CHUTES", 17, 16, 3))
+        self.assertTrue(caption_qualifies("ATACANTES", "CHUTES", 17, 17, 3))
+
+    def test_every_position_uses_dark_or_confirmed_medium(self):
+        cases = [
+            ("MEIAS", "AF", 9, 12),
+            ("VOLANTES", "DE", 14, 17),
+            ("LATERAIS", "DE", 8, 10),
+            ("ZAGUEIROS", "CHUTES", 4, 5),
+        ]
+        for position, metric, medium, dark in cases:
+            with self.subTest(position=position, metric=metric):
+                self.assertFalse(caption_qualifies(position, metric, medium, 0, 3))
+                self.assertTrue(caption_qualifies(position, metric, medium, medium, 3))
+                self.assertTrue(caption_qualifies(position, metric, dark, 0, 3))
+
     def test_median_values_stay_white(self):
         self.assertIsNone(classify("ATACANTES", "COC_CHUTES", 16, 3))
         self.assertIsNone(classify("ATACANTES", "COC_AF", 30, 3))

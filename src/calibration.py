@@ -115,3 +115,31 @@ def classify_cell(position: str, col_name: str, value, row, window_n: int) -> st
     entre elas é feita na leitura do confronto, sem esconder uma célula forte.
     """
     return classify(position, col_name, value, window_n)
+
+
+_LEVEL_RANK = {None: 0, "light": 1, "medium": 2, "dark": 3}
+
+
+def caption_qualifies(position: str, metric: str, own_value, conceded_value,
+                      window_n: int, support: dict | None = None) -> bool:
+    """Decide a entrada na legenda usando exatamente a régua das cores.
+
+    A legenda é mais seletiva que a tabela: entra um destaque próprio forte
+    (faixa escura) ou um cruzamento em que produção e concessão alcançam a
+    faixa média. Exceções de hierarquia ficam explícitas aqui, nunca espalhadas
+    nos geradores de texto.
+    """
+    pos, scout = str(position).upper(), str(metric).upper()
+    own = _LEVEL_RANK[classify(pos, scout, own_value, window_n)]
+    conceded = _LEVEL_RANK[classify(pos, scout, conceded_value, window_n)]
+    support = support or {}
+
+    if pos == "ATACANTES" and scout == "PG":
+        shots = _LEVEL_RANK[classify(pos, "CHUTES", support.get("CHUTES", 0), window_n)]
+        return own >= 2 or (own >= 1 and shots >= 2)
+    if pos == "ATACANTES" and scout == "CHUTES":
+        return own >= 2 or (own >= 1 and conceded >= 1)
+
+    # Em todas as demais leituras validadas, a regra operacional é a mesma:
+    # faixa escura própria OU faixa média confirmada pelos dois lados.
+    return own >= 3 or (own >= 2 and conceded >= 2)

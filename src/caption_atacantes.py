@@ -1,5 +1,4 @@
-"""
-caption_atacantes.py
+"""caption_atacantes.py
 ====================
 Gerador de legenda textual para a tabela de Atacantes.
 
@@ -22,6 +21,8 @@ Prefixos das colunas:
   COF = conquistado pelo visitante fora
   CDC = cedido pelo mandante quando joga em casa
 """
+
+from .calibration import caption_qualifies
 
 # ============================================================
 # DICIONÁRIOS DE ARTIGOS
@@ -146,46 +147,6 @@ def _make_bold(wrap):
     if wrap == "<b>":
         return lambda t: f"<b>{t}</b>"
     return lambda t: t
-
-
-# ============================================================
-# CRITÉRIOS DE QUALIFICAÇÃO (seletivos)
-# ============================================================
-
-def _qualifies_fin(fin_t: float, fin_c: float) -> bool:
-    """True se os atacantes passam nos critérios de FINALIZAÇÕES.
-
-    1. Produção própria forte:           FIN_TIME >= 18
-    2. Produção sólida + cedido alto:    FIN_TIME >= 15  E  FIN_CED >= 15
-    3. Base mínima + cedido muito alto:  FIN_TIME >= 12  E  FIN_CED >= 21
-    """
-    return fin_t >= 17
-
-
-def _qualifies_pg(pg_t: float, pg_c: float, fin_t: float) -> bool:
-    """True se os atacantes passam nos critérios de G + A.
-
-    1. Produção própria forte:                 PG_TIME >= 5
-    2. Cruzamento forte:                       PG_TIME >= 4  E  PG_CED >= 4
-    3. Base + cedido alto + volume de finalizações:
-                                               PG_TIME >= 3  E  PG_CED >= 6
-                                               E  FIN_TIME >= 15
-    """
-    return False
-
-
-def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
-    """True se os atacantes passam nos critérios de MÉDIA BÁSICA.
-
-    1. Produção própria forte:            BAS_TIME >= 3.0
-    2. Produção sólida + cedido alto:     BAS_TIME >= 2.5  E  BAS_CED >= 3.0
-    3. Base mínima + cedido muito alto:   BAS_TIME >= 2.4  E  BAS_CED >= 3.5
-
-    Usa round_1 para alinhar com o display da tabela (evita float impreciso).
-    """
-    t = round_1(bas_t)
-    c = round_1(bas_c)
-    return t >= 2.6
 
 
 # ============================================================
@@ -330,12 +291,11 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 },
             }
 
-            factor = max(window_n, 1) / 3
-            if fin_t >= 20 * factor or (fin_t >= 17 * factor and fin_c >= 17 * factor):
+            if caption_qualifies("ATACANTES", "CHUTES", fin_t, fin_c, window_n):
                 fin_list.append(entry)
-            if pg_t >= 5 * factor or (pg_t >= 3 * factor and fin_t >= 20 * factor):
+            if caption_qualifies("ATACANTES", "PG", pg_t, pg_c, window_n, {"CHUTES": fin_t}):
                 pg_list.append(entry)
-            if round_1(bas_t) >= 3.5 or (round_1(bas_t) >= 3.0 and round_1(bas_c) >= 3.0):
+            if caption_qualifies("ATACANTES", "BASICA", bas_t, bas_c, window_n):
                 bas_list.append(entry)
 
     return {"fin": fin_list, "pg": pg_list, "bas": bas_list}

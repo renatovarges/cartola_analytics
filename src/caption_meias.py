@@ -1,5 +1,4 @@
-"""
-caption_meias.py
+"""caption_meias.py
 ================
 Gerador de legenda textual para a tabela de Meias.
 
@@ -20,6 +19,8 @@ Prefixos das colunas:
   COF = conquistado pelo visitante fora
   CDC = cedido pelo mandante quando joga em casa
 """
+
+from .calibration import caption_qualifies
 
 # ============================================================
 # DICIONÁRIOS DE ARTIGOS
@@ -153,59 +154,6 @@ def _make_bold(wrap):
     if wrap == "<b>":
         return lambda t: f"<b>{t}</b>"
     return lambda t: t
-
-
-# ============================================================
-# CRITÉRIOS DE QUALIFICAÇÃO (seletivos)
-# ============================================================
-
-def _qualifies_af(af_t: float, af_c: float) -> bool:
-    """True se os meias de armação passam nos critérios de PASSE P/ FINALIZ.
-
-    1. Produção própria forte:       AF_TIME >= 12
-    2. Produção sólida + cedido alto: AF_TIME >= 10  E  AF_CED >= 12
-    3. Base mínima + cedido muito alto: AF_TIME >= 9  E  AF_CED >= 15
-    """
-    return af_t >= 8
-
-
-def _qualifies_fin(fin_t: float, fin_c: float) -> bool:
-    """True se os meias de armação passam nos critérios de FINALIZAÇÕES.
-
-    1. Produção própria forte:           FIN_TIME >= 9
-    2. Produção sólida + cedido alto:    FIN_TIME >= 8  E  FIN_CED >= 10
-    3. Base mínima + cedido muito alto:  FIN_TIME >= 7  E  FIN_CED >= 12
-
-    Nota: FIN_TIME=7 e FIN_CED=7 NÃO entra — está abaixo do corte visual da tabela.
-    """
-    return fin_t >= 7
-
-
-def _qualifies_pg(pg_t: float, pg_c: float, af_t: float, fin_t: float) -> bool:
-    """True se os meias de armação passam nos critérios de G + A.
-
-    1. Produção própria forte:                  PG_TIME >= 3
-    2. Cruzamento com volume alto + contexto:   PG_TIME >= 2  E  PG_CED >= 3
-                                                E (AF_TIME >= 9 OU FIN_TIME >= 7)
-
-    Nota: PG_TIME=2 e PG_CED=2 NÃO entra — dado setorial exige adversário cedendo mais.
-    """
-    return pg_t >= 2
-
-
-def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
-    """True se os meias de armação passam nos critérios de MÉDIA BÁSICA.
-
-    1. Produção própria forte:            BAS_TIME >= 3.0
-    2. Produção sólida + cedido alto:     BAS_TIME >= 2.5  E  BAS_CED >= 3.0
-    3. Base mínima + cedido muito alto:   BAS_TIME >= 2.4  E  BAS_CED >= 3.5
-
-    Nota: BAS_TIME=2.0 e BAS_CED=3.0 NÃO entra — produção própria abaixo do limiar.
-    Usa round_1 para alinhar com o display da tabela (evita float impreciso).
-    """
-    t = round_1(bas_t)
-    c = round_1(bas_c)
-    return t >= 2.4
 
 
 # ============================================================
@@ -378,14 +326,13 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 },
             }
 
-            factor = max(window_n, 1) / 3
-            if af_t >= 12 * factor or (af_t >= 9 * factor and af_c >= 9 * factor):
+            if caption_qualifies("MEIAS", "AF", af_t, af_c, window_n):
                 af_list.append(entry)
-            if fin_t >= 12 * factor or (fin_t >= 9 * factor and fin_c >= 9 * factor):
+            if caption_qualifies("MEIAS", "CHUTES", fin_t, fin_c, window_n):
                 fin_list.append(entry)
-            if pg_t >= 5 * factor or (pg_t >= 3 * factor and pg_c >= 3 * factor):
+            if caption_qualifies("MEIAS", "PG", pg_t, pg_c, window_n):
                 pg_list.append(entry)
-            if round_1(bas_t) >= 3.3 or (round_1(bas_t) >= 2.9 and round_1(bas_c) >= 2.9):
+            if caption_qualifies("MEIAS", "BASICA", bas_t, bas_c, window_n):
                 bas_list.append(entry)
 
     return {"af": af_list, "fin": fin_list, "pg": pg_list, "bas": bas_list}

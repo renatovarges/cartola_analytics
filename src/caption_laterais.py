@@ -1,5 +1,4 @@
-"""
-caption_laterais.py
+"""caption_laterais.py
 ===================
 Gerador de legenda textual para a tabela de Laterais.
 
@@ -21,6 +20,8 @@ Colunas do engine (prefixos COC/CDF/COF/CDC + posição + scout):
   COF = produção própria do visitante jogando fora
   CDC = cedido pelo mandante quando joga em casa
 """
+
+from .calibration import caption_qualifies
 
 # ============================================================
 # DICIONÁRIOS DE ARTIGOS
@@ -156,41 +157,6 @@ def _make_bold(wrap):
 
 
 # ============================================================
-# CRITÉRIOS DE QUALIFICAÇÃO
-# ============================================================
-
-def _qualifies_desarmes(des_t: float, des_c: float, bas_t: float) -> bool:
-    """True se o lateral passa nos critérios de DESARMES.
-
-    1. Produção própria muito forte:         DES_TIME >= 10
-    2. Cruzamento forte dos dois lados:      DES_TIME >= 8  E DES_CED >= 8
-    3. Adversário cede muito + base mínima:  DES_CED >= 10  E DES_TIME >= 7
-    """
-    return des_t >= 6
-
-
-def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
-    """True se o lateral passa nos critérios de MÉD. BÁSICA.
-
-    1. Produção própria muito forte:         BAS_TIME >= 4.0
-    2. Cruzamento forte dos dois lados:      BAS_TIME >= 3.5  E BAS_CED >= 3.5
-    3. Adversário cede muito + base mínima:  BAS_CED >= 4.0   E BAS_TIME >= 3.3
-    4. Cruzamento alto com base mínima:      BAS_CRUZADA >= 4.0 E BAS_TIME >= 3.3
-    """
-    return bas_t >= 3.1
-
-
-def _qualifies_ga(ga_t: float, ga_c: float, bas_t: float, des_t: float) -> bool:
-    """True se o lateral passa nos critérios de G + A.
-
-    1. Produção própria forte:          GA_TIME >= 2
-    2. Produção + adversário + contexto: GA_TIME >= 1 E GA_CED >= 2
-                                         E (BAS_TIME >= 3.5 OU DES_TIME >= 8)
-    """
-    return ga_t >= 1
-
-
-# ============================================================
 # CONSTRUTORES DE FRASE
 # ============================================================
 
@@ -316,12 +282,11 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 },
             }
 
-            factor = max(window_n, 1) / 3
-            if des_t >= 10 * factor or (des_t >= 8 * factor and des_c >= 8 * factor):
+            if caption_qualifies("LATERAIS", "DE", des_t, des_c, window_n):
                 des_list.append(entry)
-            if round_1(bas_t) >= 4.2 or (round_1(bas_t) >= 3.7 and round_1(bas_c) >= 3.7):
+            if caption_qualifies("LATERAIS", "BASICA", bas_t, bas_c, window_n):
                 bas_list.append(entry)
-            if ga_t >= 3 * factor or (ga_t >= 2 * factor and ga_c >= 2 * factor):
+            if caption_qualifies("LATERAIS", "PG", ga_t, ga_c, window_n):
                 ga_list.append(entry)
 
     return {"des": des_list, "bas": bas_list, "ga": ga_list}

@@ -1,5 +1,4 @@
-"""
-caption_zagueiros.py
+"""caption_zagueiros.py
 ====================
 Gerador de legenda textual para a tabela de Zagueiros.
 
@@ -21,6 +20,8 @@ Prefixos das colunas:
   COF = produção própria do visitante jogando fora
   CDC = cedido pelo mandante quando joga em casa
 """
+
+from .calibration import caption_qualifies
 
 # ============================================================
 # DICIONÁRIOS DE ARTIGOS
@@ -154,54 +155,6 @@ def _make_bold(wrap):
     if wrap == "<b>":
         return lambda t: f"<b>{t}</b>"
     return lambda t: t
-
-
-# ============================================================
-# CRITÉRIOS DE QUALIFICAÇÃO (seletivos)
-# ============================================================
-
-def _qualifies_sg(sg_t: float) -> bool:
-    """True apenas se os zagueiros vieram pegando SG no recorte.
-
-    Critério único: SG_TIME >= 2.
-    """
-    return sg_t >= 2
-
-
-def _qualifies_des(des_t: float, des_c: float) -> bool:
-    """True se os zagueiros passam nos critérios de DESARMES.
-
-    1. Produção própria muito forte:    DES_TIME >= 12
-    2. Cruzamento equilibrado forte:    DES_TIME >= 9  E DES_CED >= 9
-    3. Adversário cede muito + base:    DES_TIME >= 8  E DES_CED >= 12
-    """
-    return des_t >= 9
-
-
-def _qualifies_fin(fin_t: float, fin_c: float) -> bool:
-    """True se os zagueiros passam nos critérios de FINALIZAÇÕES.
-
-    1. Produção própria forte:          FIN_TIME >= 5
-    2. Cruzamento equilibrado forte:    FIN_TIME >= 4  E FIN_CED >= 4
-    3. Adversário cede muito + base:    FIN_TIME >= 3  E FIN_CED >= 7
-    """
-    return False
-
-
-def _qualifies_bas(bas_t: float, bas_c: float) -> bool:
-    """True se os zagueiros passam nos critérios de MÉDIA BÁSICA.
-
-    1. Produção própria forte:          BAS_TIME >= 2.7
-    2. Cruzamento equilibrado forte:    BAS_TIME >= 2.4  E BAS_CED >= 2.4
-    3. Adversário cede muito + base:    BAS_TIME >= 2.0  E BAS_CED >= 3.0
-
-    Os limiares comparam valores arredondados a 1 casa decimal (round_1),
-    alinhados com o display da tabela — evita falsos negativos por
-    imprecisão de ponto flutuante (ex: 2.6999...97 exibido como 2,7).
-    """
-    t = round_1(bas_t)
-    c = round_1(bas_c)
-    return False
 
 
 # ============================================================
@@ -357,12 +310,11 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 },
             }
 
-            factor = max(window_n, 1) / 3
-            if des_t >= 14 * factor or (des_t >= 11 * factor and des_c >= 11 * factor):
+            if caption_qualifies("ZAGUEIROS", "DE", des_t, des_c, window_n):
                 des_list.append(entry)
-            if fin_player and (fin_t >= 5 * factor or (fin_t >= 4 * factor and fin_c >= 4 * factor)):
+            if fin_player and caption_qualifies("ZAGUEIROS", "CHUTES", fin_t, fin_c, window_n):
                 fin_list.append(entry)
-            if round_1(bas_t) >= 3.5 or (round_1(bas_t) >= 3.1 and round_1(bas_c) >= 3.1):
+            if caption_qualifies("ZAGUEIROS", "BASICA", bas_t, bas_c, window_n):
                 bas_list.append(entry)
 
     return {"sg": sg_list, "des": des_list, "fin": fin_list, "bas": bas_list}

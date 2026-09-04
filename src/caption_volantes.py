@@ -1,6 +1,7 @@
 """Legendas simples para os destaques coletivos de volantes."""
 
 from .caption_meias import _fmt_team, _make_bold, _safe, format_pg, format_pontos
+from .calibration import caption_qualifies
 
 
 def _generate(rows, rodada, window_n=3, wrap=None):
@@ -20,11 +21,10 @@ def _generate(rows, rodada, window_n=3, wrap=None):
             pg_c = _safe(row, f"{conceded}_PG")
             bas = _safe(row, f"{own}_BASICA")
             bas_c = _safe(row, f"{conceded}_BASICA")
-            factor = max(window_n, 1) / 3
             scouts = set()
-            if de >= 17 * factor or (de >= 14 * factor and de_c >= 14 * factor): scouts.add("de")
-            if bas >= 4.8 or (bas >= 4.0 and bas_c >= 4.0): scouts.add("bas")
-            if pg >= 4 * factor or (pg >= 3 * factor and pg_c >= 3 * factor): scouts.add("pg")
+            if caption_qualifies("VOLANTES", "DE", de, de_c, window_n): scouts.add("de")
+            if caption_qualifies("VOLANTES", "BASICA", bas, bas_c, window_n): scouts.add("bas")
+            if caption_qualifies("VOLANTES", "PG", pg, pg_c, window_n): scouts.add("pg")
             if scouts:
                 candidates.append({"team": team, "mando": mando, "de": de, "bas": bas,
                     "pg": pg, "scouts": scouts, "leaders": {
