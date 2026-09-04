@@ -334,7 +334,7 @@ def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None, varia
 _LEVEL_VALUE = {"-": 0, "SINAL": 1, "BOM": 2, "FORTE": 3}
 
 
-def _profile_priority(sg_level: str, def_level: str) -> int:
+def _profile_priority(profile: str, sg_level: str, def_level: str) -> int:
     """Hierarquia da legenda baseada no cenário completo do goleiro.
 
     Equilíbrio em dois caminhos supera força isolada. Entre os perfis de um
@@ -343,6 +343,11 @@ def _profile_priority(sg_level: str, def_level: str) -> int:
     """
     sg = _LEVEL_VALUE.get(str(sg_level), 0)
     de = _LEVEL_VALUE.get(str(def_level), 0)
+    # O perfil final é a síntese que chega ao usuário. Se os dois caminhos
+    # passaram no filtro, o equilíbrio deve superar qualquer caminho isolado,
+    # inclusive quando cada lado ainda está na faixa inicial de sinal.
+    if profile == "AMBOS":
+        return 500 + 10 * max(sg, de) + min(sg, de)
     if sg == 3 and de == 3:
         return 600
     if min(sg, de) >= 2 and max(sg, de) == 3:
@@ -369,8 +374,8 @@ def _collect_entries(goleiros_rows: list) -> list:
         if perf_v in ("nan", "None", "", "NaN"):
             perf_v = "-"
 
-        priority_m = _profile_priority(row.get("SG_NIVEL_MANDANTE", "-"), row.get("DEFESAS_NIVEL_MANDANTE", "-"))
-        priority_v = _profile_priority(row.get("SG_NIVEL_VISITANTE", "-"), row.get("DEFESAS_NIVEL_VISITANTE", "-"))
+        priority_m = _profile_priority(perf_m, row.get("SG_NIVEL_MANDANTE", "-"), row.get("DEFESAS_NIVEL_MANDANTE", "-"))
+        priority_v = _profile_priority(perf_v, row.get("SG_NIVEL_VISITANTE", "-"), row.get("DEFESAS_NIVEL_VISITANTE", "-"))
 
         if perf_m in _PERFIS_POSITIVOS and priority_m:
             entries.append({

@@ -86,8 +86,10 @@ class GoalkeeperProfileTests(unittest.TestCase):
     def test_balanced_profiles_beat_isolated_strong_signals(self):
         specs = [
             ("Gabriel Brazão", "FORTE", "BOM", "AMBOS", 10, 2),
-            ("Carlos Miguel", "BOM", "BOM", "AMBOS", 10, 1),
-            ("Everson", "BOM", "BOM", "AMBOS", 10, 1),
+            # Na rodada real, o perfil final é AMBOS mesmo quando os dois
+            # componentes individuais ainda estão na faixa SINAL.
+            ("Carlos Miguel", "SINAL", "SINAL", "AMBOS", 10, 1),
+            ("Everson", "SINAL", "SINAL", "AMBOS", 10, 1),
             ("Mycael", "-", "FORTE", "DEFESAS", 12, 0),
             ("Rossi", "-", "FORTE", "DEFESAS", 12, 0),
             ("Ronaldo", "FORTE", "-", "SG", 15, 2),
