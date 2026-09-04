@@ -49,6 +49,20 @@ class CaptionSynthesisTests(unittest.TestCase):
                "DESTAQUES_MANDANTE_LD_DE": float("nan")}
         text = generate_laterais_caption_plain([row], 26, 3)
         self.assertEqual(text.count("Os laterais do Flamengo"), 1)
+        self.assertIn("pela esquerda", text)
+        self.assertIn("pela direita", text)
+
+    def test_single_lateral_side_is_named_directly(self):
+        row = {"MANDANTE": "CORINTHIANS", "VISITANTE": "VASCO",
+               "COC_LE_DE": 0, "CDF_LE_DE": 0, "COC_LE_PG": 0, "CDF_LE_PG": 0,
+               "COC_LE_BAS": 0, "CDF_LE_BAS": 0,
+               "COC_LD_DE": 13, "CDF_LD_DE": 8, "COC_LD_PG": 0, "CDF_LD_PG": 0,
+               "COC_LD_BAS": 5.3, "CDF_LD_BAS": 4.0,
+               "DESTAQUES_MANDANTE_LD_DE": ["Matheuzinho"],
+               "DESTAQUES_MANDANTE_LD_BASICA": ["Matheuzinho"]}
+        text = generate_laterais_caption_plain([row], 26, 3)
+        self.assertIn("O lateral direito do Corinthians", text)
+        self.assertNotIn("Os laterais do Corinthians", text)
 
 
 if __name__ == "__main__":

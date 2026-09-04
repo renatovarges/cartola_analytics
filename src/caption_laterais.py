@@ -317,33 +317,42 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     grouped = {}
     for scout, entries in (("des", des_list), ("bas", bas_list), ("ga", ga_list)):
         for e in entries:
-            item = grouped.setdefault(e["time"], {"entry": e, "scouts": set(), "best": {}})
-            item["scouts"].add(scout)
-            metric = {"des": "des_t", "bas": "bas_t", "ga": "ga_t"}[scout]
-            if scout not in item["best"] or e[metric] > item["best"][scout][metric]:
-                item["best"][scout] = e
+            item = grouped.setdefault(e["time"], {"entry": e, "sides": {}})
+            side = item["sides"].setdefault(e["lado"], {"entry": e, "scouts": set()})
+            side["scouts"].add(scout)
     ranked = sorted(grouped.values(), key=lambda x: (
-        "des" in x["scouts"], "bas" in x["scouts"], len(x["scouts"]),
-        x["best"].get("des", x["entry"])["des_t"]), reverse=True)[:5]
+        any("des" in side["scouts"] for side in x["sides"].values()),
+        sum(len(side["scouts"]) for side in x["sides"].values()),
+        max(side["entry"]["des_t"] for side in x["sides"].values())), reverse=True)[:5]
     lines += ["", b("🧱 DESTAQUES ENTRE OS LATERAIS"), ""]
     for item in ranked:
-        e, scouts = item["entry"], item["scouts"]
-        names = []
-        for key in ("des", "bas", "ga"):
-            for name in item["best"].get(key, e)["leaders"][key]:
-                if name not in names: names.append(name)
-        subject = b(f"Os laterais {_fmt_team(e['time'])}")
-        facts = []
-        if "des" in scouts: facts.append(f"{int(item['best']['des']['des_t'])} desarmes")
-        if "bas" in scouts: facts.append(f"média básica de {format_pontos_media(item['best']['bas']['bas_t'])} pontos")
-        if "ga" in scouts: facts.append(f"{int(item['best']['ga']['ga_t'])} participações em gol")
-        links = []
+        e = item["entry"]
+        active_sides = [(side_key, item["sides"][side_key]) for side_key in ("LE", "LD") if side_key in item["sides"]]
+        segments, links = [], []
         labels = {"des": "desarmes", "bas": "pontuação básica", "ga": "G + A"}
-        for key in ("des", "bas", "ga"):
-            linked = item["best"].get(key, e)["leaders"][key]
-            if key in scouts and linked: links.append(f"{labels[key]} — {b(' / '.join(linked))}")
+        for side_key, side in active_sides:
+            side_entry, scouts = side["entry"], side["scouts"]
+            facts = []
+            if "des" in scouts: facts.append(f"{int(side_entry['des_t'])} desarmes")
+            if "bas" in scouts: facts.append(f"média básica de {format_pontos_media(side_entry['bas_t'])} pontos")
+            if "ga" in scouts: facts.append(f"{int(side_entry['ga_t'])} participações em gol")
+            side_label = "pela esquerda" if side_key == "LE" else "pela direita"
+            segments.append(f"{side_label}, {' e '.join(facts)}")
+            for key in ("des", "bas", "ga"):
+                linked = side_entry["leaders"][key]
+                if key in scouts and linked:
+                    links.append(f"{labels[key]} {side_label} — {b(' / '.join(linked))}")
+
+        if len(active_sides) == 1:
+            side_key, side = active_sides[0]
+            subject = b(f"O lateral {_LADO_TXT[side_key]} {_fmt_team(e['time'])}")
+            # O sujeito já informa o lado; evita repetir "pela direita/esquerda".
+            detail = segments[0].split(", ", 1)[1]
+        else:
+            subject = b(f"Os laterais {_fmt_team(e['time'])}")
+            detail = "; ".join(segments)
         suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
-        lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
+        lines.append(f"{subject}: {detail} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
 
     return "\n".join(lines)
 
