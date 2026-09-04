@@ -318,8 +318,16 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 "mando_txt": "em casa" if equipe_key == "MANDANTE" else "fora",
                 "fin_t": fin_t, "fin_c": fin_c,
                 "pg_t":  pg_t,  "pg_c":  pg_c,
+                "g_t": _safe(row, f"{'COC' if equipe_key == 'MANDANTE' else 'COF'}_G"),
+                "a_t": _safe(row, f"{'COC' if equipe_key == 'MANDANTE' else 'COF'}_A"),
                 "bas_t": bas_t, "bas_c": bas_c,
-                "players": row.get(f"JOGADORES_{equipe_key}_ATA", []) or [],
+                "leaders": {
+                    "g": row.get(f"DESTAQUES_{equipe_key}_G", []) or [],
+                    "a": row.get(f"DESTAQUES_{equipe_key}_A", []) or [],
+                    "pg": row.get(f"DESTAQUES_{equipe_key}_PG", []) or [],
+                    "fin": row.get(f"DESTAQUES_{equipe_key}_CHUTES", []) or [],
+                    "bas": row.get(f"DESTAQUES_{equipe_key}_BASICA", []) or [],
+                },
             }
 
             factor = max(window_n, 1) / 3
@@ -343,10 +351,6 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     fin_list   = candidates["fin"]
     pg_list    = candidates["pg"]
     bas_list   = candidates["bas"]
-    pg_list = sorted(pg_list, key=lambda e: (e["pg_t"], e["fin_t"], e["pg_c"]), reverse=True)[:3]
-    fin_list = sorted(fin_list, key=lambda e: (e["fin_t"], e["fin_c"]), reverse=True)[:2]
-    bas_list = sorted(bas_list, key=lambda e: (e["bas_t"], e["bas_c"]), reverse=True)[:2]
-
     lines = [
         b("ANÁLISE ESTATÍSTICA — ATACANTES"),
         "",
@@ -360,35 +364,37 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         ]
         return "\n".join(lines)
 
-    def _bloco(titulo: str, entradas: list, builder) -> list:
-        bloco = ["", b(titulo), ""]
-        for e in entradas:
-            article = _fmt_team(e["time"])
-            frase   = builder(e, article, wrap)
-            if e.get("players"):
-                frase = f"{b('Opções: ' + ' / '.join(e['players']))}. {frase}"
-            if frase:
-                bloco.append(frase)
-                bloco.append("")
-        while bloco and bloco[-1] == "":
-            bloco.pop()
-        return bloco
-
-    def _build_fin(e, article, wrap):
-        return _sentence_fin(article, int(e["fin_t"]), int(e["fin_c"]), e["mando_txt"], wrap)
-
-    def _build_pg(e, article, wrap):
-        return _sentence_pg(article, int(e["pg_t"]), int(e["pg_c"]), e["mando_txt"], wrap)
-
-    def _build_bas(e, article, wrap):
-        return _sentence_bas(article, e["bas_t"], e["bas_c"], e["mando_txt"], wrap)
-
-    if pg_list:
-        lines += _bloco("⚽ ATACANTES PARA G + A", pg_list, _build_pg)
-    if fin_list:
-        lines += _bloco("🚀 ATACANTES PARA FINALIZAÇÕES", fin_list, _build_fin)
-    if bas_list:
-        lines += _bloco("📊 ATACANTES PARA MÉDIA BÁSICA", bas_list, _build_bas)
+    grouped = {}
+    for scout, entries in (("pg", pg_list), ("fin", fin_list), ("bas", bas_list)):
+        for entry in entries:
+            grouped.setdefault(entry["time"], {"entry": entry, "scouts": set()})["scouts"].add(scout)
+    ranked = sorted(grouped.values(), key=lambda x: (
+        "pg" in x["scouts"], x["entry"]["g_t"], len(x["scouts"]), x["entry"]["pg_t"],
+        x["entry"]["fin_t"], x["entry"]["bas_t"]), reverse=True)[:5]
+    lines += ["", b("⚽ DESTAQUES ENTRE OS ATACANTES"), ""]
+    for item in ranked:
+        e, scouts = item["entry"], item["scouts"]
+        leaders = e["leaders"]
+        subject = b(f"Os atacantes {_fmt_team(e['time'])}")
+        facts = []
+        if "pg" in scouts:
+            if e["g_t"] > 0:
+                goals = f"{int(e['g_t'])} gol" if int(e["g_t"]) == 1 else f"{int(e['g_t'])} gols"
+                assists = f" e {int(e['a_t'])} assistência" if e["a_t"] == 1 else (f" e {int(e['a_t'])} assistências" if e["a_t"] else "")
+                facts.append(f"marcaram {b(goals + assists)}")
+            else:
+                facts.append(f"somaram {b(format_pg(e['pg_t']).lower())}")
+        if "fin" in scouts:
+            facts.append(f"fizeram {b(format_finalizacoes(e['fin_t']).lower())}")
+        if "bas" in scouts:
+            facts.append(f"tiveram média básica de {b(format_pontos(e['bas_t']) + ' pontos')}")
+        links = []
+        if "pg" in scouts and leaders["g"]: links.append(f"gols — {b(' / '.join(leaders['g']))}")
+        if "pg" in scouts and leaders["a"]: links.append(f"assistências — {b(' / '.join(leaders['a']))}")
+        if "fin" in scouts and leaders["fin"]: links.append(f"finalizações — {b(' / '.join(leaders['fin']))}")
+        if "bas" in scouts and leaders["bas"]: links.append(f"pontuação básica — {b(' / '.join(leaders['bas']))}")
+        suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
+        lines.append(f"{subject}: {' e '.join(facts)} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
 
     return "\n".join(lines)
 

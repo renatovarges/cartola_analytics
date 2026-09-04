@@ -164,6 +164,8 @@ class CartolaEngine:
         # Vou usar SOMA dos scouts de volume (G, A, Chutes) e MÉDIA da Básica (per capita).
         
         game_stats = df.groupby("MATCH_ID").agg({
+            "G": "sum",
+            "A": "sum",
             "PG": "sum",
             "CHUTES": "sum",
             "AF": "sum",
@@ -180,9 +182,11 @@ class CartolaEngine:
             slice_stats = game_stats
             
         if len(slice_stats) == 0:
-            return {k: 0 for k in ["PG", "CHUTES", "AF", "DE", "BASICA"]}
+            return {k: 0 for k in ["G", "A", "PG", "CHUTES", "AF", "DE", "BASICA"]}
             
         return {
+            "G": slice_stats["G"].sum(),
+            "A": slice_stats["A"].sum(),
             "PG": slice_stats["PG"].sum(), # Soma na janela! (Documento: 'Método: SOMA')
             "CHUTES": slice_stats["CHUTES"].sum(), # SOMA
             "AF": slice_stats["AF"].sum(), # SOMA
@@ -285,13 +289,13 @@ class CartolaEngine:
             "MANDANTE": mandante,
             "VISITANTE": visitante,
             # COC
-            "COC_PG": coc["PG"], "COC_CHUTES": coc["CHUTES"], "COC_AF": coc["AF"], "COC_DE": coc["DE"], "COC_BASICA": coc["BASICA"],
+            "COC_G": coc["G"], "COC_A": coc["A"], "COC_PG": coc["PG"], "COC_CHUTES": coc["CHUTES"], "COC_AF": coc["AF"], "COC_DE": coc["DE"], "COC_BASICA": coc["BASICA"],
             # CDF
-            "CDF_PG": cdf["PG"], "CDF_CHUTES": cdf["CHUTES"], "CDF_AF": cdf["AF"], "CDF_DE": cdf["DE"], "CDF_BASICA": cdf["BASICA"],
+            "CDF_G": cdf["G"], "CDF_A": cdf["A"], "CDF_PG": cdf["PG"], "CDF_CHUTES": cdf["CHUTES"], "CDF_AF": cdf["AF"], "CDF_DE": cdf["DE"], "CDF_BASICA": cdf["BASICA"],
             # COF
-            "COF_PG": cof["PG"], "COF_CHUTES": cof["CHUTES"], "COF_AF": cof["AF"], "COF_DE": cof["DE"], "COF_BASICA": cof["BASICA"],
+            "COF_G": cof["G"], "COF_A": cof["A"], "COF_PG": cof["PG"], "COF_CHUTES": cof["CHUTES"], "COF_AF": cof["AF"], "COF_DE": cof["DE"], "COF_BASICA": cof["BASICA"],
             # CDC
-            "CDC_PG": cdc["PG"], "CDC_CHUTES": cdc["CHUTES"], "CDC_AF": cdc["AF"], "CDC_DE": cdc["DE"], "CDC_BASICA": cdc["BASICA"],
+            "CDC_G": cdc["G"], "CDC_A": cdc["A"], "CDC_PG": cdc["PG"], "CDC_CHUTES": cdc["CHUTES"], "CDC_AF": cdc["AF"], "CDC_DE": cdc["DE"], "CDC_BASICA": cdc["BASICA"],
         }
 
     def get_audit_trace(self, df_raw, window_n, time_filter=None, mando_filter=None):
@@ -334,13 +338,13 @@ class CartolaEngine:
             mv = {"MEIAS": "MEIA", "VOLANTES": "VOLANTE", "ATACANTES": "ATACANTE"}[pos]
             df = self.get_meias_stats_raw(date_cutoff, mv_filter=mv)
             metrics = {
-                "MEIAS": ["AF", "CHUTES", "PG"],
-                "VOLANTES": ["DE", "PG"],
-                "ATACANTES": ["CHUTES", "PG"],
+                "MEIAS": ["PG", "CHUTES", "AF", "BASICA"],
+                "VOLANTES": ["DE", "BASICA", "PG"],
+                "ATACANTES": ["G", "A", "PG", "CHUTES", "BASICA"],
             }[pos]
         elif pos == "ZAGUEIROS":
             df = self.get_zagueiros_stats_raw(date_cutoff)
-            metrics = ["DE", "CHUTES"]
+            metrics = ["DE", "CHUTES", "BASICA"]
         elif pos == "LATERAIS":
             raw = self.df_pj.copy()
             if date_cutoff is not None:
@@ -349,7 +353,9 @@ class CartolaEngine:
             df = raw[real.round(1).isin([2.2, 2.6])].copy()
             df["DE"] = pd.to_numeric(df.get("DS", 0), errors="coerce").fillna(0)
             df["PG"] = pd.to_numeric(df.get("G", 0), errors="coerce").fillna(0) + pd.to_numeric(df.get("A", 0), errors="coerce").fillna(0)
-            metrics = ["DE", "PG"]
+            if "BASICA" not in df.columns:
+                df["BASICA"] = pd.to_numeric(df.get("PONTOS", 0), errors="coerce").fillna(0)
+            metrics = ["DE", "BASICA", "PG"]
         else:
             return pd.DataFrame()
 
@@ -367,8 +373,9 @@ class CartolaEngine:
                 continue
             values = pd.to_numeric(df[metric], errors="coerce").fillna(0)
             work = df.assign(_VALUE=values)
+            aggregation = "mean" if metric == "BASICA" else "sum"
             players = work.groupby("NOME", as_index=False).agg(
-                TOTAL=("_VALUE", "sum"),
+                TOTAL=("_VALUE", aggregation),
                 JOGOS=("MATCH_ID", "nunique"),
             )
             players = players[players["TOTAL"].gt(0)].sort_values(

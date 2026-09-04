@@ -309,7 +309,11 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 "des_t": des_t, "des_c": des_c,
                 "ga_t":  ga_t,  "ga_c":  ga_c,
                 "bas_t": bas_t, "bas_c": bas_c,
-                "players": row.get(f"JOGADORES_{equipe_key}_{lado}", []) or [],
+                "leaders": {
+                    "des": row.get(f"DESTAQUES_{equipe_key}_{lado}_DE", []) or [],
+                    "bas": row.get(f"DESTAQUES_{equipe_key}_{lado}_BASICA", []) or [],
+                    "ga": row.get(f"DESTAQUES_{equipe_key}_{lado}_PG", []) or [],
+                },
             }
 
             factor = max(window_n, 1) / 3
@@ -334,23 +338,6 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     bas_list   = candidates["bas"]
     ga_list    = candidates["ga"]
 
-    # LE e LD usam a mesma posição no Cartola. Na legenda, evita repetir o mesmo
-    # time duas vezes no mesmo scout; conserva o lado com o número mais alto.
-    def _one_per_team(entries, metric):
-        chosen = {}
-        for entry in entries:
-            current = chosen.get(entry["time"])
-            if current is None or entry[metric] > current[metric]:
-                chosen[entry["time"]] = entry
-        return list(chosen.values())
-
-    des_list = _one_per_team(des_list, "des_t")
-    bas_list = _one_per_team(bas_list, "bas_t")
-    ga_list = _one_per_team(ga_list, "ga_t")
-    des_list = sorted(des_list, key=lambda e: (e["des_t"], e["des_c"]), reverse=True)[:2]
-    bas_list = sorted(bas_list, key=lambda e: (e["bas_t"], e["bas_c"]), reverse=True)[:2]
-    ga_list = sorted(ga_list, key=lambda e: (e["ga_t"], e["ga_c"]), reverse=True)[:2]
-
     lines = [
         b("ANÁLISE ESTATÍSTICA — LATERAIS"),
         "",
@@ -361,37 +348,36 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         lines += ["", "Nenhum lateral passou nos filtros de destaque positivo nesta rodada."]
         return "\n".join(lines)
 
-    def _bloco(titulo: str, entradas: list, builder) -> list:
-        """Monta as linhas de um bloco e retorna lista."""
-        bloco = ["", b(titulo), ""]
-        for e in entradas:
-            article = _fmt_team(e["time"])
-            frase   = builder(e, article, wrap)
-            if e.get("players"):
-                frase = f"{b('Opções: ' + ' / '.join(e['players']))}. {frase}"
-            if frase:
-                bloco.append(frase)
-                bloco.append("")
-        # Remove última linha vazia dentro do bloco
-        while bloco and bloco[-1] == "":
-            bloco.pop()
-        return bloco
-
-    def _build_des(e, article, wrap):
-        return _sentence_desarmes(article, e["lado"], int(e["des_t"]), int(e["des_c"]), e["mando_txt"], wrap)
-
-    def _build_bas(e, article, wrap):
-        return _sentence_bas(article, e["lado"], e["bas_t"], e["bas_c"], e["mando_txt"], wrap)
-
-    def _build_ga(e, article, wrap):
-        return _sentence_ga(article, e["lado"], int(e["ga_t"]), int(e["ga_c"]), e["mando_txt"], wrap)
-
-    if des_list:
-        lines += _bloco("🧱 LATERAIS PARA DESARMES", des_list, _build_des)
-    if bas_list:
-        lines += _bloco("📊 LATERAIS PARA MÉD. BÁSICA", bas_list, _build_bas)
-    if ga_list:
-        lines += _bloco("🎯 LATERAIS PARA G + A", ga_list, _build_ga)
+    grouped = {}
+    for scout, entries in (("des", des_list), ("bas", bas_list), ("ga", ga_list)):
+        for e in entries:
+            item = grouped.setdefault(e["time"], {"entry": e, "scouts": set(), "best": {}})
+            item["scouts"].add(scout)
+            metric = {"des": "des_t", "bas": "bas_t", "ga": "ga_t"}[scout]
+            if scout not in item["best"] or e[metric] > item["best"][scout][metric]:
+                item["best"][scout] = e
+    ranked = sorted(grouped.values(), key=lambda x: (
+        "des" in x["scouts"], "bas" in x["scouts"], len(x["scouts"]),
+        x["best"].get("des", x["entry"])["des_t"]), reverse=True)[:5]
+    lines += ["", b("🧱 DESTAQUES ENTRE OS LATERAIS"), ""]
+    for item in ranked:
+        e, scouts = item["entry"], item["scouts"]
+        names = []
+        for key in ("des", "bas", "ga"):
+            for name in item["best"].get(key, e)["leaders"][key]:
+                if name not in names: names.append(name)
+        subject = b(f"Os laterais {_fmt_team(e['time'])}")
+        facts = []
+        if "des" in scouts: facts.append(f"{int(item['best']['des']['des_t'])} desarmes")
+        if "bas" in scouts: facts.append(f"média básica de {format_pontos_media(item['best']['bas']['bas_t'])} pontos")
+        if "ga" in scouts: facts.append(f"{int(item['best']['ga']['ga_t'])} participações em gol")
+        links = []
+        labels = {"des": "desarmes", "bas": "pontuação básica", "ga": "G + A"}
+        for key in ("des", "bas", "ga"):
+            linked = item["best"].get(key, e)["leaders"][key]
+            if key in scouts and linked: links.append(f"{labels[key]} — {b(' / '.join(linked))}")
+        suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
+        lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
 
     return "\n".join(lines)
 

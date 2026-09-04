@@ -83,6 +83,34 @@ class GoalkeeperProfileTests(unittest.TestCase):
         self.assertEqual(text.count("O melhor caminho"), 1)
         self.assertEqual(text.count("boas oportunidades"), 1)
 
+    def test_balanced_profiles_beat_isolated_strong_signals(self):
+        specs = [
+            ("Gabriel Brazão", "FORTE", "BOM", "AMBOS", 10, 2),
+            ("Carlos Miguel", "BOM", "BOM", "AMBOS", 10, 1),
+            ("Everson", "BOM", "BOM", "AMBOS", 10, 1),
+            ("Mycael", "-", "FORTE", "DEFESAS", 12, 0),
+            ("Rossi", "-", "FORTE", "DEFESAS", 12, 0),
+            ("Ronaldo", "FORTE", "-", "SG", 15, 2),
+            ("Tiago Volpi", "FORTE", "-", "SG", 15, 2),
+        ]
+        rows = []
+        for name, sg, de, profile, saves, clean_sheets in specs:
+            candidate = base_row(COC_DE=saves, COC_SG=clean_sheets)
+            candidate.update({
+                "PERFIL_MANDANTE": profile,
+                "PERFIL_VISITANTE": "-",
+                "SG_NIVEL_MANDANTE": sg,
+                "DEFESAS_NIVEL_MANDANTE": de,
+                "JOGADORES_MANDANTE_GOL": [name],
+            })
+            rows.append(candidate)
+
+        text = generate_goalkeeper_caption_plain(rows, 26, 3)
+        for selected in ("Gabriel Brazão", "Carlos Miguel", "Everson", "Mycael", "Rossi"):
+            self.assertIn(selected, text)
+        self.assertNotIn("Ronaldo", text)
+        self.assertNotIn("Tiago Volpi", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -370,7 +370,12 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 "fin_t": fin_t, "fin_c": fin_c,
                 "pg_t":  pg_t,  "pg_c":  pg_c,
                 "bas_t": bas_t, "bas_c": bas_c,
-                "players": row.get(f"JOGADORES_{equipe_key}_MEI", []) or [],
+                "leaders": {
+                    "pg": row.get(f"DESTAQUES_{equipe_key}_PG", []) or [],
+                    "fin": row.get(f"DESTAQUES_{equipe_key}_CHUTES", []) or [],
+                    "af": row.get(f"DESTAQUES_{equipe_key}_AF", []) or [],
+                    "bas": row.get(f"DESTAQUES_{equipe_key}_BASICA", []) or [],
+                },
             }
 
             factor = max(window_n, 1) / 3
@@ -398,13 +403,6 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     pg_list    = candidates["pg"]
     bas_list   = candidates["bas"]
 
-    # A tabela preserva todos os sinais; a legenda resume os dois maiores de
-    # cada scout para continuar sendo uma seleção, não uma repetição da tabela.
-    af_list = sorted(af_list, key=lambda e: (e["af_t"], e["af_c"]), reverse=True)[:2]
-    fin_list = sorted(fin_list, key=lambda e: (e["fin_t"], e["fin_c"]), reverse=True)[:2]
-    pg_list = sorted(pg_list, key=lambda e: (e["pg_t"], e["pg_c"]), reverse=True)[:2]
-    bas_list = sorted(bas_list, key=lambda e: (e["bas_t"], e["bas_c"]), reverse=True)[:2]
-
     lines = [
         b("ANÁLISE ESTATÍSTICA — MEIAS"),
         "",
@@ -418,40 +416,28 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         ]
         return "\n".join(lines)
 
-    def _bloco(titulo: str, entradas: list, builder) -> list:
-        bloco = ["", b(titulo), ""]
-        for e in entradas:
-            article = _fmt_team(e["time"])
-            frase   = builder(e, article, wrap)
-            if e.get("players"):
-                frase = f"{b('Opções: ' + ' / '.join(e['players']))}. {frase}"
-            if frase:
-                bloco.append(frase)
-                bloco.append("")
-        while bloco and bloco[-1] == "":
-            bloco.pop()
-        return bloco
-
-    def _build_af(e, article, wrap):
-        return _sentence_af(article, int(e["af_t"]), int(e["af_c"]), e["mando_txt"], wrap)
-
-    def _build_fin(e, article, wrap):
-        return _sentence_fin(article, int(e["fin_t"]), int(e["fin_c"]), e["mando_txt"], wrap)
-
-    def _build_pg(e, article, wrap):
-        return _sentence_pg(article, int(e["pg_t"]), int(e["pg_c"]), e["mando_txt"], wrap)
-
-    def _build_bas(e, article, wrap):
-        return _sentence_bas(article, e["bas_t"], e["bas_c"], e["mando_txt"], wrap)
-
-    if af_list:
-        lines += _bloco("🧠 MEIAS PARA PASSE P/ FINALIZ.", af_list, _build_af)
-    if fin_list:
-        lines += _bloco("🚀 MEIAS PARA FINALIZAÇÕES", fin_list, _build_fin)
-    if pg_list:
-        lines += _bloco("⚽ MEIAS PARA G + A", pg_list, _build_pg)
-    if bas_list:
-        lines += _bloco("📊 MEIAS PARA MÉDIA BÁSICA", bas_list, _build_bas)
+    grouped = {}
+    for scout, entries in (("pg", pg_list), ("fin", fin_list), ("af", af_list), ("bas", bas_list)):
+        for e in entries:
+            grouped.setdefault(e["time"], {"entry": e, "scouts": set()})["scouts"].add(scout)
+    ranked = sorted(grouped.values(), key=lambda x: (
+        len(x["scouts"]), "pg" in x["scouts"], x["entry"]["pg_t"],
+        x["entry"]["fin_t"], x["entry"]["af_t"]), reverse=True)[:5]
+    lines += ["", b("🧠 DESTAQUES ENTRE OS MEIAS"), ""]
+    for item in ranked:
+        e, scouts = item["entry"], item["scouts"]
+        subject = b(f"Os meias {_fmt_team(e['time'])}")
+        facts = []
+        if "pg" in scouts: facts.append(f"{b(format_pg(e['pg_t']).lower())}")
+        if "fin" in scouts: facts.append(f"{b(format_finalizacoes(e['fin_t']).lower())}")
+        if "af" in scouts: facts.append(f"{b(format_af(e['af_t']).lower())}")
+        if "bas" in scouts: facts.append(f"média básica de {b(format_pontos(e['bas_t']) + ' pontos')}")
+        links = []
+        labels = {"pg": "G + A", "fin": "finalizações", "af": "passes para finalização", "bas": "pontuação básica"}
+        for key in ("pg", "fin", "af", "bas"):
+            if key in scouts and e["leaders"][key]: links.append(f"{labels[key]} — {b(' / '.join(e['leaders'][key]))}")
+        suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
+        lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
 
     return "\n".join(lines)
 

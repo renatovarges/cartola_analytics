@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from src.cartola_lineups import build_lineups, inject_lineups
+from src.cartola_lineups import build_lineups, inject_lineups, inject_scout_leaders
 
 
 class CartolaLineupsTests(unittest.TestCase):
@@ -28,6 +28,24 @@ class CartolaLineupsTests(unittest.TestCase):
         self.assertEqual(rows[0]["JOGADORES_MANDANTE_GOL"], ["Rossi", "Matheus Cunha (Dúvida)"])
         self.assertEqual(rows[0]["JOGADORES_MANDANTE_LD"], ["Varela"])
         self.assertNotIn("Goleiro fora", rows[0]["JOGADORES_MANDANTE_GOL"])
+
+    def test_scout_leader_must_be_probable_or_doubt(self):
+        class Engine:
+            def get_player_concentration(self, *args, **kwargs):
+                return pd.DataFrame([
+                    {"SCOUT": "CHUTES", "RANK": 1, "NOME": "FORA", "TOTAL": 9},
+                    {"SCOUT": "CHUTES", "RANK": 2, "NOME": "PEDRO", "TOTAL": 6},
+                    {"SCOUT": "CHUTES", "RANK": 3, "NOME": "PAULO", "TOTAL": 4},
+                ])
+        lineups = {"FLAMENGO": {"ATA": [
+            {"nome": "Pedro", "status": 7}, {"nome": "Paulo (Dúvida)", "status": 2}
+        ]}}
+        rows = inject_scout_leaders(
+            [{"MANDANTE": "FLAMENGO", "VISITANTE": "VASCO"}],
+            lineups, Engine(), "ATACANTES", 3,
+        )
+        self.assertEqual(rows[0]["DESTAQUES_MANDANTE_CHUTES"], ["Pedro"])
+        self.assertNotIn("Fora", rows[0]["DESTAQUES_MANDANTE_CHUTES"])
 
 
 if __name__ == "__main__":

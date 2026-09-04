@@ -5,7 +5,7 @@ from .caption_meias import _fmt_team, _make_bold, _safe, format_pg, format_ponto
 
 def _generate(rows, rodada, window_n=3, wrap=None):
     b = _make_bold(wrap)
-    desarmes, basicas, ofensivas = [], [], []
+    candidates = []
     for row in rows:
         for team_key, own, conceded, mando in (
             ("MANDANTE", "COC", "CDF", "em casa"),
@@ -20,34 +20,36 @@ def _generate(rows, rodada, window_n=3, wrap=None):
             pg_c = _safe(row, f"{conceded}_PG")
             bas = _safe(row, f"{own}_BASICA")
             bas_c = _safe(row, f"{conceded}_BASICA")
-            article = _fmt_team(team)
-            players = row.get(f"JOGADORES_{team_key}_VOL", []) or []
-            prefix = ("Opções: " + " / ".join(players) + ". ") if players else ""
             factor = max(window_n, 1) / 3
-            if de >= 17 * factor or (de >= 14 * factor and de_c >= 14 * factor):
-                text = prefix + f"Os volantes {article} fizeram {int(de)} desarmes nos últimos {window_n} jogos {mando}."
-                if de_c >= 14 * factor:
-                    text += f" O adversário também cedeu {int(de_c)} desarmes a volantes."
-                desarmes.append(text)
-            if bas >= 4.8 or (bas >= 4.0 and bas_c >= 4.0):
-                basicas.append(
-                    prefix + f"Os volantes {article} tiveram média básica de {format_pontos(bas)} pontos nos últimos {window_n} jogos {mando}."
-                )
-            if pg >= 4 * factor or (pg >= 3 * factor and pg_c >= 3 * factor):
-                ofensivas.append(
-                    prefix + f"Os volantes {article} somaram {format_pg(pg).lower()} nos últimos {window_n} jogos {mando}."
-                )
+            scouts = set()
+            if de >= 17 * factor or (de >= 14 * factor and de_c >= 14 * factor): scouts.add("de")
+            if bas >= 4.8 or (bas >= 4.0 and bas_c >= 4.0): scouts.add("bas")
+            if pg >= 4 * factor or (pg >= 3 * factor and pg_c >= 3 * factor): scouts.add("pg")
+            if scouts:
+                candidates.append({"team": team, "mando": mando, "de": de, "bas": bas,
+                    "pg": pg, "scouts": scouts, "leaders": {
+                        "de": row.get(f"DESTAQUES_{team_key}_DE", []) or [],
+                        "bas": row.get(f"DESTAQUES_{team_key}_BASICA", []) or [],
+                        "pg": row.get(f"DESTAQUES_{team_key}_PG", []) or []}})
 
-    desarmes.sort(key=lambda text: int(text.split(" fizeram ", 1)[1].split(" ", 1)[0]), reverse=True)
-    basicas.sort(key=lambda text: float(text.split(" de ", 1)[1].split(" ", 1)[0].replace(",", ".")), reverse=True)
-    ofensivas.sort()
+    candidates.sort(key=lambda e: ("de" in e["scouts"], "bas" in e["scouts"],
+                                    len(e["scouts"]), e["de"], e["bas"]), reverse=True)
     lines = [b("ANÁLISE ESTATÍSTICA — VOLANTES"), "", f"Destaques dos últimos {window_n} jogos por mando."]
-    for title, entries in (("VOLANTES PARA DESARMES", desarmes[:2]),
-                           ("VOLANTES PARA PONTUAÇÃO BÁSICA", basicas[:2]),
-                           ("PARTICIPAÇÃO OFENSIVA — COMPLEMENTO", ofensivas[:2])):
-        if entries:
-            lines += ["", b(title), ""] + [b(e) if False else e for e in entries]
-    if len(lines) == 3:
+    if candidates:
+        lines += ["", b("🧱 DESTAQUES ENTRE OS VOLANTES"), ""]
+    for e in candidates[:5]:
+        subject = b(f"Os volantes {_fmt_team(e['team'])}")
+        facts = []
+        if "de" in e["scouts"]: facts.append(f"{int(e['de'])} desarmes")
+        if "bas" in e["scouts"]: facts.append(f"média básica de {format_pontos(e['bas'])} pontos")
+        if "pg" in e["scouts"]: facts.append(format_pg(e["pg"]).lower())
+        links = []
+        labels = {"de": "desarmes", "bas": "pontuação básica", "pg": "G + A"}
+        for key in ("de", "bas", "pg"):
+            if key in e["scouts"] and e["leaders"][key]: links.append(f"{labels[key]} — {b(' / '.join(e['leaders'][key]))}")
+        suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
+        lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando']}.{suffix}")
+    if not candidates:
         lines += ["", "Nenhum grupo de volantes passou nos filtros desta rodada."]
     return "\n".join(lines)
 

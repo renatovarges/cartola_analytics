@@ -46,7 +46,7 @@ from src.caption_volantes import (
 )
 from src.clipboard_utils import copy_text_to_clipboard
 from src.calibration import classify
-from src.cartola_lineups import build_lineups, inject_lineups
+from src.cartola_lineups import build_lineups, inject_lineups, inject_scout_leaders
 
 # ---------------------------------------------------------------------------
 # Helper — exibe resultado do botão de copiar (Windows ou web)
@@ -283,7 +283,9 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
                     mandante,
                     visitante,
                     window_n,
-                    mando_mode=tipo_filtro
+                    date_cutoff=data_corte,
+                    mando_mode=tipo_filtro,
+                    rodada_curr=rodada_alvo,
                 )
             elif macro_pos == "Atacantes":
                  row = engine.generate_confronto_table(
@@ -306,7 +308,18 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
 
     if results:
         try:
-            results = inject_lineups(results, build_lineups(engine.df_pj))
+            _lineups = build_lineups(engine.df_pj)
+            results = inject_lineups(results, _lineups)
+            _caption_position = {
+                "Meias": "VOLANTES" if mv_filter_val == "VOLANTE" else "MEIAS",
+                "Atacantes": "ATACANTES", "Zagueiros": "ZAGUEIROS",
+                "Laterais": "LATERAIS",
+            }.get(macro_pos)
+            if _caption_position:
+                results = inject_scout_leaders(
+                    results, _lineups, engine, _caption_position,
+                    window_n=window_n, date_cutoff=data_corte,
+                )
         except Exception:
             # A API enriquece as frases, mas nunca pode impedir a tabela.
             pass

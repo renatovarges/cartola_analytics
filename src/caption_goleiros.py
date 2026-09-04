@@ -303,8 +303,8 @@ def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None, varia
         else:
             templates = [
                 f"🛡️🧤 {b(subject_gol)} combina {b('segurança para SG e volume de defesas')}: registrou {b(f'{def_t_i} defesas')} e {b(format_sg(sg_t_i))} nos últimos jogos {mando_txt}.",
-                f"🛡️🧤 O cenário de {b(subject_gol)} é completo. Há força tanto para {b('SG')} quanto para defesas, com {b(f'{def_t_i} defesas')} e {b(format_sg(sg_t_i))} no recorte.",
-                f"🛡️🧤 {b(subject_gol)} oferece duas rotas de pontuação: {b('SG e defesas')}. No período, somou {b(f'{def_t_i} defesas')} e passou {b(format_sg(sg_t_i))} sem sofrer gols.",
+                f"🛡️🧤 O cenário de {b(subject_gol)} é completo. Há bons sinais tanto para {b('SG')} quanto para defesas, com {b(f'{def_t_i} defesas')} e {b(format_sg(sg_t_i))} no recorte.",
+                f"🛡️🧤 {b(subject_gol)} oferece duas rotas de pontuação: {b('SG e defesas')}. No período, somou {b(f'{def_t_i} defesas')} e conseguiu {b(format_sg(sg_t_i))}.",
             ]
         return templates[variant % len(templates)]
 
@@ -331,6 +331,30 @@ def _build_entry(time: str, perfil: str, row: dict, mando: str, wrap=None, varia
 # HELPER INTERNO — coleta entradas positivas
 # ============================================================
 
+_LEVEL_VALUE = {"-": 0, "SINAL": 1, "BOM": 2, "FORTE": 3}
+
+
+def _profile_priority(sg_level: str, def_level: str) -> int:
+    """Hierarquia da legenda baseada no cenário completo do goleiro.
+
+    Equilíbrio em dois caminhos supera força isolada. Entre os perfis de um
+    caminho só, defesas vêm antes de SG porque ainda oferecem pontuação mesmo
+    quando o time sofre gol.
+    """
+    sg = _LEVEL_VALUE.get(str(sg_level), 0)
+    de = _LEVEL_VALUE.get(str(def_level), 0)
+    if sg == 3 and de == 3:
+        return 600
+    if min(sg, de) >= 2 and max(sg, de) == 3:
+        return 550
+    if sg >= 2 and de >= 2:
+        return 500
+    if de == 3:
+        return 400
+    if sg == 3:
+        return 300
+    return 0
+
 def _collect_entries(goleiros_rows: list) -> list:
     """Filtra e empacota apenas os perfis positivos de uma lista de linhas."""
     entries = []
@@ -345,23 +369,23 @@ def _collect_entries(goleiros_rows: list) -> list:
         if perf_v in ("nan", "None", "", "NaN"):
             perf_v = "-"
 
-        strong_m = row.get("SG_NIVEL_MANDANTE") == "FORTE" or row.get("DEFESAS_NIVEL_MANDANTE") == "FORTE"
-        strong_v = row.get("SG_NIVEL_VISITANTE") == "FORTE" or row.get("DEFESAS_NIVEL_VISITANTE") == "FORTE"
+        priority_m = _profile_priority(row.get("SG_NIVEL_MANDANTE", "-"), row.get("DEFESAS_NIVEL_MANDANTE", "-"))
+        priority_v = _profile_priority(row.get("SG_NIVEL_VISITANTE", "-"), row.get("DEFESAS_NIVEL_VISITANTE", "-"))
 
-        if perf_m in _PERFIS_POSITIVOS and strong_m:
+        if perf_m in _PERFIS_POSITIVOS and priority_m:
             entries.append({
                 "order": _PERFIS_POSITIVOS[perf_m],
-                "strength": int(row.get("SG_NIVEL_MANDANTE") == "FORTE") + int(row.get("DEFESAS_NIVEL_MANDANTE") == "FORTE"),
+                "priority": priority_m,
                 "volume": _safe(row, "COC_DE") + 3 * _safe(row, "COC_SG"),
                 "time":  mandante,
                 "perfil": perf_m,
                 "mando": "MANDANTE",
                 "row":   row,
             })
-        if perf_v in _PERFIS_POSITIVOS and strong_v:
+        if perf_v in _PERFIS_POSITIVOS and priority_v:
             entries.append({
                 "order": _PERFIS_POSITIVOS[perf_v],
-                "strength": int(row.get("SG_NIVEL_VISITANTE") == "FORTE") + int(row.get("DEFESAS_NIVEL_VISITANTE") == "FORTE"),
+                "priority": priority_v,
                 "volume": _safe(row, "COF_DE") + 3 * _safe(row, "COF_SG"),
                 "time":  visitante,
                 "perfil": perf_v,
@@ -385,7 +409,7 @@ def _generate(
     b = _make_bold(wrap)
 
     entries = _collect_entries(goleiros_rows)
-    entries.sort(key=lambda e: (e["strength"], e["volume"], -e["order"]), reverse=True)
+    entries.sort(key=lambda e: (e["priority"], e["volume"], -e["order"]), reverse=True)
     if max_entries is None:
         max_entries = 5
     if max_entries is not None:

@@ -20,16 +20,17 @@ class ZagueirosCaptionTests(unittest.TestCase):
 
     def test_individual_finishing_names_player(self):
         text = generate_zagueiros_caption_plain([
-            self.base_row(COC_CHUTES_INDIV=5, COC_CHUTES_JOGADOR="JOÃO SILVA")
+            self.base_row(COC_CHUTES_INDIV=5, COC_CHUTES_JOGADOR="JOÃO SILVA",
+                          DESTAQUES_MANDANTE_CHUTES=["João Silva"])
         ], 23, 3)
-        self.assertIn("João Silva fez 5 FINALIZAÇÕES", text)
-        self.assertNotIn("Os zagueiros do Flamengo somaram 5 FINALIZAÇÕES", text)
+        self.assertIn("5 finalizações do principal finalizador", text)
+        self.assertIn("João Silva", text)
 
     def test_basic_only_enters_exceptional_band(self):
         ordinary = generate_zagueiros_caption_plain([self.base_row(COC_BASICA=2.6)], 23, 3)
         exceptional = generate_zagueiros_caption_plain([self.base_row(COC_BASICA=3.5)], 23, 3)
         self.assertNotIn("MÉDIA BÁSICA", ordinary)
-        self.assertIn("MÉDIA BÁSICA", exceptional)
+        self.assertIn("média básica", exceptional)
 
     def test_individual_threshold_scales_with_window(self):
         text = generate_zagueiros_caption_plain([

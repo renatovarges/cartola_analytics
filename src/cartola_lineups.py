@@ -118,3 +118,70 @@ def inject_lineups(rows: list[dict], lineups: dict) -> list[dict]:
             for role in ("GOL", "LE", "LD", "LAT", "ZAG", "MEI", "VOL", "ATA"):
                 row[f"JOGADORES_{side}_{role}"] = player_names(lineups, team, role)
     return rows
+
+
+def _lineup_lookup(lineups: dict, team: str, roles: tuple[str, ...]) -> dict[str, str]:
+    """Nome normalizado -> rótulo público, restrito a provável ou dúvida."""
+    found = {}
+    club = lineups.get(_canonical_team(team), {})
+    for role in roles:
+        for entry in club.get(role, []):
+            label = entry["nome"]
+            clean = label.replace(" (Dúvida)", "")
+            found[_key(clean)] = label
+    return found
+
+
+def inject_scout_leaders(rows: list[dict], lineups: dict, engine, position: str,
+                         window_n: int = 3, date_cutoff=None) -> list[dict]:
+    """Vincula cada scout somente a atletas prováveis/dúvidas que o produziram.
+
+    A tabela continua coletiva. Esses campos existem apenas para impedir que a
+    legenda atribua um destaque a todo provável da posição ou a um atleta fora.
+    """
+    pos = str(position).upper()
+    role_map = {
+        "MEIAS": ("MEI",), "VOLANTES": ("VOL",), "ATACANTES": ("ATA",),
+        "ZAGUEIROS": ("ZAG",), "LATERAIS": ("LE", "LD", "LAT"),
+    }
+    roles = role_map.get(pos)
+    if not roles:
+        return rows
+    for row in rows:
+        for side, mando in (("MANDANTE", "CASA"), ("VISITANTE", "FORA")):
+            team = str(row.get(side, "")).strip()
+            eligible = _lineup_lookup(lineups, team, roles)
+            if not team or not eligible:
+                continue
+            concentration = engine.get_player_concentration(
+                team, pos, window_n=window_n, mando_filter=mando,
+                date_cutoff=date_cutoff,
+            )
+            if concentration is None or concentration.empty:
+                continue
+            for scout, group in concentration.groupby("SCOUT", sort=False):
+                matches = []
+                for item in group.sort_values(["RANK", "NOME"]).itertuples():
+                    label = eligible.get(_key(item.NOME))
+                    if label:
+                        matches.append((label, float(item.TOTAL)))
+                if not matches:
+                    continue
+                best = matches[0][1]
+                # Empates reais são mantidos; não transformamos toda a posição em opção.
+                names = [label for label, value in matches if value == best]
+                row[f"DESTAQUES_{side}_{scout}"] = names
+                if pos == "LATERAIS":
+                    for lateral_role in ("LE", "LD"):
+                        lateral_eligible = _lineup_lookup(lineups, team, (lateral_role,))
+                        lateral_matches = [
+                            (lateral_eligible[_key(item.NOME)], float(item.TOTAL))
+                            for item in group.sort_values(["RANK", "NOME"]).itertuples()
+                            if _key(item.NOME) in lateral_eligible
+                        ]
+                        if lateral_matches:
+                            lateral_best = lateral_matches[0][1]
+                            row[f"DESTAQUES_{side}_{lateral_role}_{scout}"] = [
+                                label for label, value in lateral_matches if value == lateral_best
+                            ]
+    return rows

@@ -337,7 +337,8 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
             des_c = _safe(row, c_des_c)
             fin_t = _safe(row, c_fin_t)
             fin_c = _safe(row, c_fin_c)
-            fin_player = str(row.get(c_fin_player, "") or "").strip()
+            fin_leaders = row.get(f"DESTAQUES_{equipe_key}_CHUTES", []) or []
+            fin_player = " / ".join(fin_leaders)
             bas_t = _safe(row, c_bas_t)
             bas_c = _safe(row, c_bas_c)
 
@@ -349,13 +350,17 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
                 "fin_t": fin_t, "fin_c": fin_c,
                 "fin_player": fin_player,
                 "bas_t": bas_t, "bas_c": bas_c,
-                "players": row.get(f"JOGADORES_{equipe_key}_ZAG", []) or [],
+                "leaders": {
+                    "des": row.get(f"DESTAQUES_{equipe_key}_DE", []) or [],
+                    "fin": fin_leaders,
+                    "bas": row.get(f"DESTAQUES_{equipe_key}_BASICA", []) or [],
+                },
             }
 
             factor = max(window_n, 1) / 3
             if des_t >= 14 * factor or (des_t >= 11 * factor and des_c >= 11 * factor):
                 des_list.append(entry)
-            if fin_t >= 5 * factor or (fin_t >= 4 * factor and fin_c >= 4 * factor):
+            if fin_player and (fin_t >= 5 * factor or (fin_t >= 4 * factor and fin_c >= 4 * factor)):
                 fin_list.append(entry)
             if round_1(bas_t) >= 3.5 or (round_1(bas_t) >= 3.1 and round_1(bas_c) >= 3.1):
                 bas_list.append(entry)
@@ -370,7 +375,6 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
 def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     b          = _make_bold(wrap)
     candidates = _collect_candidates(rows, window_n)
-    sg_list    = candidates["sg"]
     des_list   = candidates["des"]
     fin_list   = candidates["fin"]
     bas_list   = candidates["bas"]
@@ -381,44 +385,31 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         f"Destaques positivos — últimos {window_n} jogos por mando.",
     ]
 
-    if not sg_list and not des_list and not fin_list and not bas_list:
+    if not des_list and not fin_list and not bas_list:
         lines += ["", "Nenhum grupo de zagueiros passou nos filtros de destaque positivo nesta rodada."]
         return "\n".join(lines)
 
-    def _bloco(titulo: str, entradas: list, builder) -> list:
-        """Monta as linhas de um bloco e retorna lista."""
-        bloco = ["", b(titulo), ""]
-        for e in entradas:
-            article = _fmt_team(e["time"])
-            frase   = builder(e, article, wrap)
-            if e.get("players") and builder != _build_fin:
-                frase = f"{b('Opções: ' + ' / '.join(e['players']))}. {frase}"
-            if frase:
-                bloco.append(frase)
-                bloco.append("")
-        # Remove última linha vazia dentro do bloco
-        while bloco and bloco[-1] == "":
-            bloco.pop()
-        return bloco
-
-    def _build_sg(e, article, wrap):
-        return _sentence_sg(article, int(e["sg_t"]), e["mando_txt"], wrap)
-
-    def _build_des(e, article, wrap):
-        return _sentence_des(article, int(e["des_t"]), int(e["des_c"]), e["mando_txt"], wrap)
-
-    def _build_fin(e, article, wrap):
-        return _sentence_fin(article, e["fin_player"], int(e["fin_t"]), int(e["fin_c"]), e["mando_txt"], window_n, wrap)
-
-    def _build_bas(e, article, wrap):
-        return _sentence_bas(article, e["bas_t"], e["bas_c"], e["mando_txt"], window_n, wrap)
-
-    if des_list:
-        lines += _bloco("🧱 ZAGUEIROS PARA DESARMES", des_list, _build_des)
-    if fin_list:
-        lines += _bloco("🎯 ZAGUEIROS PARA FINALIZAÇÕES", fin_list, _build_fin)
-    if bas_list:
-        lines += _bloco("📈 ZAGUEIROS PARA MÉDIA BÁSICA", bas_list, _build_bas)
+    grouped = {}
+    for scout, entries in (("des", des_list), ("fin", fin_list), ("bas", bas_list)):
+        for e in entries:
+            grouped.setdefault(e["time"], {"entry": e, "scouts": set()})["scouts"].add(scout)
+    ranked = sorted(grouped.values(), key=lambda x: (
+        "des" in x["scouts"], len(x["scouts"]), x["entry"]["des_t"],
+        x["entry"]["bas_t"], x["entry"]["fin_t"]), reverse=True)[:5]
+    lines += ["", b("🧱 DESTAQUES ENTRE OS ZAGUEIROS"), ""]
+    for item in ranked:
+        e, scouts = item["entry"], item["scouts"]
+        subject = b(f"Os zagueiros {_fmt_team(e['time'])}")
+        facts = []
+        if "des" in scouts: facts.append(f"{int(e['des_t'])} desarmes")
+        if "fin" in scouts: facts.append(f"{int(e['fin_t'])} finalizações do principal finalizador")
+        if "bas" in scouts: facts.append(f"média básica de {format_pontos(e['bas_t'])} pontos")
+        links = []
+        labels = {"des": "desarmes", "fin": "finalizações", "bas": "pontuação básica"}
+        for key in ("des", "fin", "bas"):
+            if key in scouts and e["leaders"][key]: links.append(f"{labels[key]} — {b(' / '.join(e['leaders'][key]))}")
+        suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
+        lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
 
     return "\n".join(lines)
 
