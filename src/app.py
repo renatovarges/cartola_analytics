@@ -8,6 +8,8 @@ import tempfile
 
 # Configuração OBRIGATÓRIA no início
 st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
+APP_VERSION = "2026.09.04-2"
+st.caption(f"Versão {APP_VERSION}")
 
 # Adiciona o diretório raiz ao sys.path para permitir "from src.engine ..."
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
