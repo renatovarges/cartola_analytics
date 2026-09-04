@@ -313,9 +313,9 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     pg_list    = candidates["pg"]
     bas_list   = candidates["bas"]
     lines = [
-        b("ANÁLISE ESTATÍSTICA — ATACANTES"),
+        b("ANÁLISE ESTATÍSTICA: ATACANTES"),
         "",
-        f"Destaques positivos — últimos {window_n} jogos por mando.",
+        f"Destaques positivos nos últimos {window_n} jogos por mando.",
     ]
 
     if not fin_list and not pg_list and not bas_list:
@@ -350,10 +350,10 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         if "bas" in scouts:
             facts.append(f"tiveram média básica de {b(format_pontos(e['bas_t']) + ' pontos')}")
         links = []
-        if "pg" in scouts and leaders["g"]: links.append(f"gols — {b(' / '.join(leaders['g']))}")
-        if "pg" in scouts and leaders["a"]: links.append(f"assistências — {b(' / '.join(leaders['a']))}")
-        if "fin" in scouts and leaders["fin"]: links.append(f"finalizações — {b(' / '.join(leaders['fin']))}")
-        if "bas" in scouts and leaders["bas"]: links.append(f"pontuação básica — {b(' / '.join(leaders['bas']))}")
+        if "pg" in scouts and leaders["g"]: links.append(f"gols: {b(' / '.join(leaders['g']))}")
+        if "pg" in scouts and leaders["a"]: links.append(f"assistências: {b(' / '.join(leaders['a']))}")
+        if "fin" in scouts and leaders["fin"]: links.append(f"finalizações: {b(' / '.join(leaders['fin']))}")
+        if "bas" in scouts and leaders["bas"]: links.append(f"pontuação básica: {b(' / '.join(leaders['bas']))}")
         suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
         lines.append(f"{subject}: {' e '.join(facts)} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
 

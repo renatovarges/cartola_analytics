@@ -9,7 +9,7 @@ import hashlib
 
 # Configuração OBRIGATÓRIA no início
 st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
-APP_VERSION = "2026.09.04-8"
+APP_VERSION = "2026.09.04-9"
 st.caption(f"Versão {APP_VERSION}")
 
 # Resultados guardados pelo Streamlit não podem sobreviver a uma mudança nas
@@ -680,8 +680,8 @@ if ("results_df" in st.session_state
         and st.session_state.get("results_key") == "Meias"
         and st.session_state.get("results_subtype") != "VOLANTE"):
     st.divider()
-    st.subheader("📋 Legenda automática — Meias")
-    st.caption("Destaques por PASSE P/ FINALIZ., FINALIZAÇÕES, G + A e MÉDIA BÁSICA. Cole no Telegram e envie — o negrito aparece automaticamente.")
+    st.subheader("📋 Legenda automática: Meias")
+    st.caption("Destaques por PASSE P/ FINALIZ., FINALIZAÇÕES, G + A e MÉDIA BÁSICA. Cole no Telegram e envie. O negrito aparece automaticamente.")
 
     try:
         df_mei_cap = st.session_state["results_df"]
@@ -727,7 +727,7 @@ if ("results_df" in st.session_state
         and st.session_state.get("results_key") == "Meias"
         and st.session_state.get("results_subtype") == "VOLANTE"):
     st.divider()
-    st.subheader("Legenda automática — Volantes")
+    st.subheader("Legenda automática: Volantes")
     try:
         rows_vol = st.session_state["results_df"].to_dict(orient="records")
         vol_plain = generate_volantes_caption_plain(rows_vol, rodada_alvo, window_n)
@@ -738,7 +738,7 @@ if ("results_df" in st.session_state
             _ok, _err = copy_text_to_clipboard(vol_tg)
             st.session_state["_legenda_vol_copy_status"] = "ok" if _ok else _err
         _show_copy_status(st.session_state.get("_legenda_vol_copy_status", ""), vol_tg)
-        with st.expander("Texto puro — Volantes"):
+        with st.expander("Texto puro: Volantes"):
             st.text_area("", vol_plain, height=300, key="caption_vol_plain_area")
     except Exception as _vol_err:
         st.warning(f"Não foi possível gerar a legenda de volantes: {_vol_err}")
@@ -746,8 +746,8 @@ if ("results_df" in st.session_state
 # --- LEGENDA AUTOMÁTICA — ATACANTES ---
 if "results_df" in st.session_state and st.session_state.get("results_key") == "Atacantes":
     st.divider()
-    st.subheader("📋 Legenda automática — Atacantes")
-    st.caption("Destaques por FINALIZAÇÕES, G + A e MÉDIA BÁSICA. Cole no Telegram e envie — o negrito aparece automaticamente.")
+    st.subheader("📋 Legenda automática: Atacantes")
+    st.caption("Destaques por FINALIZAÇÕES, G + A e MÉDIA BÁSICA. Cole no Telegram e envie. O negrito aparece automaticamente.")
 
     try:
         df_atk_cap = st.session_state["results_df"]
@@ -792,8 +792,8 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
 # --- LEGENDA AUTOMÁTICA — GOLEIROS ---
 if "results_df" in st.session_state and st.session_state.get("results_key") == "Goleiros":
     st.divider()
-    st.subheader("📋 Legenda automática — Goleiros")
-    st.caption("Apenas perfis positivos (SG+DE, SG, DE). Cole no Telegram e envie — o negrito aparece automaticamente.")
+    st.subheader("📋 Legenda automática: Goleiros")
+    st.caption("Apenas perfis positivos (SG+DE, SG, DE). Cole no Telegram e envie. O negrito aparece automaticamente.")
 
     try:
         df_gol_cap = st.session_state["results_df"]
@@ -863,8 +863,8 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
 # --- LEGENDA AUTOMÁTICA — LATERAIS ---
 if "results_df" in st.session_state and st.session_state.get("results_key") == "Laterais":
     st.divider()
-    st.subheader("📋 Legenda automática — Laterais")
-    st.caption("Destaques por DESARMES, MÉD. BÁSICA e G + A. Cole no Telegram e envie — o negrito aparece automaticamente.")
+    st.subheader("📋 Legenda automática: Laterais")
+    st.caption("Destaques por DESARMES, MÉD. BÁSICA e G + A. Cole no Telegram e envie. O negrito aparece automaticamente.")
 
     try:
         df_lat_cap = st.session_state["results_df"]
@@ -930,8 +930,8 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
 # --- LEGENDA AUTOMÁTICA — ZAGUEIROS ---
 if "results_df" in st.session_state and st.session_state.get("results_key") == "Zagueiros":
     st.divider()
-    st.subheader("📋 Legenda automática — Zagueiros")
-    st.caption("Destaques por SG, DESARMES, FINALIZAÇÕES e MÉD. BÁSICA. Cole no Telegram e envie — o negrito aparece automaticamente.")
+    st.subheader("📋 Legenda automática: Zagueiros")
+    st.caption("Destaques por SG, DESARMES, FINALIZAÇÕES e MÉD. BÁSICA. Cole no Telegram e envie. O negrito aparece automaticamente.")
 
     try:
         df_zag_cap = st.session_state["results_df"]

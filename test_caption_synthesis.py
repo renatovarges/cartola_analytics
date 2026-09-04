@@ -15,16 +15,20 @@ class CaptionSynthesisTests(unittest.TestCase):
                "DESTAQUES_MANDANTE_A": ["Cebolinha"],
                "DESTAQUES_MANDANTE_CHUTES": ["Pedro"]}
         text = generate_atacantes_caption_plain([row], 26, 3)
+        self.assertNotIn("—", text)
+        self.assertNotIn("–", text)
         self.assertEqual(text.count("Os atacantes do Flamengo"), 1)
-        self.assertIn("gols — Pedro", text)
-        self.assertIn("assistências — Cebolinha", text)
-        self.assertIn("finalizações — Pedro", text)
+        self.assertIn("gols: Pedro", text)
+        self.assertIn("assistências: Cebolinha", text)
+        self.assertIn("finalizações: Pedro", text)
 
     def test_window_is_never_hardcoded(self):
         row = {"MANDANTE": "FLAMENGO", "VISITANTE": "VASCO",
                "COC_AF": 25, "CDF_AF": 20, "COC_CHUTES": 0, "CDF_CHUTES": 0,
                "COC_PG": 0, "CDF_PG": 0, "COC_BASICA": 0, "CDF_BASICA": 0}
         text = generate_meias_caption_plain([row], 26, 5)
+        self.assertNotIn("—", text)
+        self.assertNotIn("–", text)
         self.assertIn("últimos 5 jogos", text)
         self.assertNotIn("últimos 3 jogos", text)
 
@@ -35,6 +39,8 @@ class CaptionSynthesisTests(unittest.TestCase):
                "DESTAQUES_MANDANTE_DE": ["Neto Moura"],
                "DESTAQUES_MANDANTE_BASICA": ["Neto Moura"]}
         text = generate_volantes_caption_plain([row], 26, 3)
+        self.assertNotIn("—", text)
+        self.assertNotIn("–", text)
         self.assertEqual(text.count("Os volantes do Mirassol"), 1)
         self.assertIn("20 desarmes", text)
         self.assertIn("média básica de 6,0 pontos", text)
@@ -48,6 +54,8 @@ class CaptionSynthesisTests(unittest.TestCase):
                "DESTAQUES_MANDANTE_LE_DE": float("nan"),
                "DESTAQUES_MANDANTE_LD_DE": float("nan")}
         text = generate_laterais_caption_plain([row], 26, 3)
+        self.assertNotIn("—", text)
+        self.assertNotIn("–", text)
         self.assertEqual(text.count("Os laterais do Flamengo"), 1)
         self.assertIn("pela esquerda", text)
         self.assertIn("pela direita", text)

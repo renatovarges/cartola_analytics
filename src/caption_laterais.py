@@ -305,9 +305,9 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     ga_list    = candidates["ga"]
 
     lines = [
-        b("ANÁLISE ESTATÍSTICA — LATERAIS"),
+        b("ANÁLISE ESTATÍSTICA: LATERAIS"),
         "",
-        f"Destaques positivos — últimos {window_n} jogos por mando.",
+        f"Destaques positivos nos últimos {window_n} jogos por mando.",
     ]
 
     if not des_list and not bas_list and not ga_list:
@@ -341,7 +341,7 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
             for key in ("des", "bas", "ga"):
                 linked = side_entry["leaders"][key]
                 if key in scouts and linked:
-                    links.append(f"{labels[key]} {side_label} — {b(' / '.join(linked))}")
+                    links.append(f"{labels[key]} {side_label}: {b(' / '.join(linked))}")
 
         if len(active_sides) == 1:
             side_key, side = active_sides[0]

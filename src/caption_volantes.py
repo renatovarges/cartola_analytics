@@ -35,7 +35,7 @@ def _generate(rows, rodada, window_n=3, wrap=None):
 
     candidates.sort(key=lambda e: ("de" in e["scouts"], "bas" in e["scouts"],
                                     len(e["scouts"]), e["de"], e["bas"]), reverse=True)
-    lines = [b("ANÁLISE ESTATÍSTICA — VOLANTES"), "", f"Destaques dos últimos {window_n} jogos por mando."]
+    lines = [b("ANÁLISE ESTATÍSTICA: VOLANTES"), "", f"Destaques dos últimos {window_n} jogos por mando."]
     if candidates:
         lines += ["", b("🧱 DESTAQUES ENTRE OS VOLANTES"), ""]
     for e in candidates[:5]:
@@ -47,7 +47,7 @@ def _generate(rows, rodada, window_n=3, wrap=None):
         links = []
         labels = {"de": "desarmes", "bas": "pontuação básica", "pg": "G + A"}
         for key in ("de", "bas", "pg"):
-            if key in e["scouts"] and e["leaders"][key]: links.append(f"{labels[key]} — {b(' / '.join(e['leaders'][key]))}")
+            if key in e["scouts"] and e["leaders"][key]: links.append(f"{labels[key]}: {b(' / '.join(e['leaders'][key]))}")
         suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
         lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando']}.{suffix}")
     if not candidates:

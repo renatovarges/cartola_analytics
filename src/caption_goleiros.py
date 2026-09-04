@@ -422,9 +422,9 @@ def _generate(
         entries = entries[:max_entries]
 
     cabecalho = [
-        b("ANÁLISE ESTATÍSTICA — GOLEIROS"),
+        b("ANÁLISE ESTATÍSTICA: GOLEIROS"),
         "",
-        f"Seleção revisada — últimos {window_n} jogos por mando.",
+        f"Seleção revisada com base nos últimos {window_n} jogos por mando.",
     ]
 
     if not entries:

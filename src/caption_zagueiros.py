@@ -333,9 +333,9 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     bas_list   = candidates["bas"]
 
     lines = [
-        b("ANÁLISE ESTATÍSTICA — ZAGUEIROS"),
+        b("ANÁLISE ESTATÍSTICA: ZAGUEIROS"),
         "",
-        f"Destaques positivos — últimos {window_n} jogos por mando.",
+        f"Destaques positivos nos últimos {window_n} jogos por mando.",
     ]
 
     if not des_list and not fin_list and not bas_list:
@@ -360,7 +360,7 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         links = []
         labels = {"des": "desarmes", "fin": "finalizações", "bas": "pontuação básica"}
         for key in ("des", "fin", "bas"):
-            if key in scouts and e["leaders"][key]: links.append(f"{labels[key]} — {b(' / '.join(e['leaders'][key]))}")
+            if key in scouts and e["leaders"][key]: links.append(f"{labels[key]}: {b(' / '.join(e['leaders'][key]))}")
         suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
         lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
 
