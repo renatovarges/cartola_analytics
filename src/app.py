@@ -5,10 +5,11 @@ import pandas as pd
 import sys
 import os
 import tempfile
+import hashlib
 
 # Configuração OBRIGATÓRIA no início
 st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
-APP_VERSION = "2026.09.04-7"
+APP_VERSION = "2026.09.04-8"
 st.caption(f"Versão {APP_VERSION}")
 
 # Resultados guardados pelo Streamlit não podem sobreviver a uma mudança nas
@@ -160,6 +161,20 @@ st.sidebar.subheader("📊 Fonte de Dados")
 file_path = None
 uploaded_file = None
 
+
+def _persist_uploaded_workbook(uploaded) -> tuple[str, str]:
+    """Grava cada planilha apenas uma vez e devolve caminho + identidade estável."""
+    payload = uploaded.getvalue()
+    token = hashlib.sha256(payload).hexdigest()
+    path = os.path.join(tempfile.gettempdir(), f"cartola_{token}.xlsx")
+    if not os.path.exists(path):
+        with open(path, "wb") as workbook:
+            workbook.write(payload)
+    return path, token
+
+
+file_token = None
+
 if IS_LOCAL:
     # Modo local: oferece escolha entre arquivo padrão ou upload
     use_upload = st.sidebar.checkbox("Usar planilha personalizada", value=False, 
@@ -171,10 +186,7 @@ if IS_LOCAL:
             help="Faça upload da planilha Scouts_Reorganizado.xlsx atualizada"
         )
         if uploaded_file is not None:
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
-            tmp.write(uploaded_file.getbuffer())
-            tmp.close()
-            file_path = tmp.name
+            file_path, file_token = _persist_uploaded_workbook(uploaded_file)
             st.sidebar.success(f"✅ Planilha carregada: {uploaded_file.name}")
         else:
             st.sidebar.warning("⚠️ Aguardando upload...")
@@ -190,17 +202,14 @@ else:
         help="Faça upload da planilha Scouts_Reorganizado.xlsx atualizada para esta rodada"
     )
     if uploaded_file is not None:
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
-        tmp.write(uploaded_file.getbuffer())
-        tmp.close()
-        file_path = tmp.name
+        file_path, file_token = _persist_uploaded_workbook(uploaded_file)
         st.sidebar.success(f"✅ Planilha carregada: {uploaded_file.name}")
     else:
         st.sidebar.warning("⚠️ Aguardando upload da planilha...")
 
 # Inicializar Engine
-# @st.cache_resource  # Temporariamente desabilitado para debug
-def get_engine_v2(path):
+@st.cache_resource(show_spinner=False)
+def get_engine_v2(path, token):
     return CartolaEngine(path)
 
 # Validar se temos arquivo para processar
@@ -209,21 +218,27 @@ if file_path is None:
     st.stop()
 
 try:
-    engine = get_engine_v2(file_path)
+    engine = get_engine_v2(file_path, file_token or os.path.getmtime(file_path))
     
     # --- GERENCIAMENTO DE HISTÓRICO AF ---
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔄 Histórico de AF")
     
-    # Automate AF processing upon load
-    with st.sidebar.status("Processando AF Automaticamente...", expanded=True) as status:
-        msg = engine.process_af_update()
-        if msg.startswith("Histórico atualizado!"):
-            status.update(label="✅ AF Atualizado!", state="complete")
-            st.sidebar.success(msg)
-        else:
-            status.update(label="ℹ️ Info", state="complete")
-            st.sidebar.info(msg)
+    # A reconstrução é pesada e não pode rodar outra vez a cada clique/rerun.
+    af_token = file_token or f"local:{os.path.getmtime(file_path)}"
+    if st.session_state.get("af_processed_token") != af_token:
+        with st.sidebar.status("Processando AF Automaticamente...", expanded=True) as status:
+            msg = engine.process_af_update()
+            st.session_state["af_processed_token"] = af_token
+            st.session_state["af_processed_message"] = msg
+            if msg.startswith("Histórico atualizado!"):
+                status.update(label="✅ AF Atualizado!", state="complete")
+                st.sidebar.success(msg)
+            else:
+                status.update(label="ℹ️ Info", state="complete")
+                st.sidebar.info(msg)
+    else:
+        st.sidebar.info(st.session_state.get("af_processed_message", "AF já processado nesta sessão."))
                 
 except Exception as e:
     st.error(f"Erro ao carregar engine: {e}")

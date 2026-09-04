@@ -4,4 +4,5 @@ numpy>=1.26,<3
 matplotlib
 openpyxl
 Pillow
-pyarrow
+# A versão 25 tem falha nativa conhecida e pode encerrar o processo sem traceback.
+pyarrow>=14,<25
