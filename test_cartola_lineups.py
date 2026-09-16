@@ -12,8 +12,25 @@ class CartolaLineupsTests(unittest.TestCase):
     def test_midfielder_classification_matches_current_roles(self):
         with patch("builtins.print"):
             roles = load_meias_volantes_classification()
-        self.assertEqual(roles["LESCANO"], "MEIA")
-        self.assertNotIn("KAYKE", roles)
+        self.assertEqual(roles[("VASCO", "LESCANO")], "MEIA")
+        self.assertNotIn(("CORINTHIANS", "KAYKE"), roles)
+        self.assertEqual(roles[("GREMIO", "EDENILSON")], "MEIA")
+        self.assertEqual(roles[("BOTAFOGO", "EDENILSON")], "VOLANTE")
+        self.assertEqual(roles[("INTERNACIONAL", "VILLAGRA")], "VOLANTE")
+        reviewed = {
+            ("BAHIA", "DAVID MARTINS"): "MEIA",
+            ("BOTAFOGO", "DOMINGOS ANDRADE"): "VOLANTE",
+            ("BOTAFOGO", "HUGUINHO"): "VOLANTE",
+            ("CHAPECOENSE", "BRUNO MATIAS"): "VOLANTE",
+            ("CHAPECOENSE", "YAGO FELIPE"): "VOLANTE",
+            ("CORITIBA", "VITOR TISSI"): "VOLANTE",
+            ("GREMIO", "JEFINHO"): "MEIA",
+            ("REMO", "DAVID BRAGA"): "MEIA",
+            ("SAO PAULO", "MARCOS ANTONIO"): "MEIA",
+            ("VITORIA", "ZE VITOR"): "VOLANTE",
+        }
+        for key, role in reviewed.items():
+            self.assertEqual(roles.get(key), role, key)
 
     def test_philippe_coutinho_is_classified_for_old_and_new_clubs(self):
         from src import config

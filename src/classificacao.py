@@ -15,16 +15,19 @@ def _normalize_name(name):
     return ''.join(c for c in nfkd if not unicodedata.combining(c))
 
 
+def _normalize_team(name):
+    team = _normalize_name(name)
+    return {
+        "INTER": "INTERNACIONAL",
+        "RB BRAGANTINO": "RED BULL BRAGANTINO",
+    }.get(team, team)
+
+
 def load_meias_volantes_classification(csv_path=None):
     """
     Carrega classificação de meias/volantes do CSV.
-    Retorna dicionário: {JOGADOR_NORMALIZADO: "MEIA" ou "VOLANTE"}
-    
-    O dicionário contém DUAS entradas por jogador:
-    - Nome original em UPPERCASE (ex: "PHILIPPE COUTINHO")
-    - Nome sem acentos em UPPERCASE (ex: "PHILIPPE COUTINHO" -> mesma coisa,
-      mas "SANTI RODRÍGUEZ" -> "SANTI RODRIGUEZ")
-    Isso garante matching mesmo com divergências de acentuação.
+    Retorna dicionário indexado por (TIME, JOGADOR), ambos normalizados.
+    Assim jogadores homônimos e transferências preservam a função por clube.
     """
     if csv_path is None:
         csv_path = os.path.join(
@@ -54,7 +57,9 @@ def load_meias_volantes_classification(csv_path=None):
         print(f"AVISO: Nenhuma coluna de nome encontrada no CSV. Colunas: {list(df.columns)}")
         return {}
     
-    # Criar dicionário com DUAS chaves por jogador (original + sem acento)
+    if "TIME" not in df.columns:
+        raise ValueError("Arquivo de classificação sem coluna TIME")
+
     classificacao_dict = {}
     meias_count = 0
     volantes_count = 0
@@ -66,12 +71,10 @@ def load_meias_volantes_classification(csv_path=None):
         if pd.notna(classe):
             classe_str = str(classe).strip().upper()
             
-            # Chave original (com acentos)
-            classificacao_dict[jogador] = classe_str
-            
-            # Chave normalizada (sem acentos)
-            jogador_norm = _normalize_name(jogador)
-            classificacao_dict[jogador_norm] = classe_str
+            key = (_normalize_team(row["TIME"]), _normalize_name(jogador))
+            if key in classificacao_dict and classificacao_dict[key] != classe_str:
+                raise ValueError(f"Classificação conflitante para {row['TIME']} / {jogador}")
+            classificacao_dict[key] = classe_str
             
             if classe_str == "MEIA":
                 meias_count += 1
