@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import patch
+from pathlib import Path
 
 import pandas as pd
 
@@ -13,6 +14,15 @@ class CartolaLineupsTests(unittest.TestCase):
             roles = load_meias_volantes_classification()
         self.assertEqual(roles["LESCANO"], "MEIA")
         self.assertNotIn("KAYKE", roles)
+
+    def test_philippe_coutinho_is_classified_for_old_and_new_clubs(self):
+        from src import config
+        roles = pd.read_csv(Path(config.INPUT_DIR) / "classificacao_meias_volantes.csv")
+        entries = roles[roles["JOGADOR"].str.upper().eq("PHILIPPE COUTINHO")]
+        self.assertEqual(
+            dict(zip(entries["TIME"], entries["CLASSIFICACAO"])),
+            {"Vasco": "MEIA", "Santos": "MEIA"},
+        )
 
     def test_nan_name_column_becomes_empty_list(self):
         self.assertEqual(safe_names(float("nan")), [])
