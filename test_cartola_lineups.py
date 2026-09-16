@@ -1,11 +1,19 @@
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
 from src.cartola_lineups import build_lineups, inject_lineups, inject_scout_leaders, safe_names
+from src.classificacao import load_meias_volantes_classification
 
 
 class CartolaLineupsTests(unittest.TestCase):
+    def test_midfielder_classification_matches_current_roles(self):
+        with patch("builtins.print"):
+            roles = load_meias_volantes_classification()
+        self.assertEqual(roles["LESCANO"], "MEIA")
+        self.assertNotIn("KAYKE", roles)
+
     def test_nan_name_column_becomes_empty_list(self):
         self.assertEqual(safe_names(float("nan")), [])
 
