@@ -83,7 +83,7 @@ class GoalkeeperProfileTests(unittest.TestCase):
         self.assertEqual(text.count("O melhor caminho"), 1)
         self.assertEqual(text.count("boas oportunidades"), 1)
 
-    def test_balanced_profiles_beat_isolated_strong_signals(self):
+    def test_every_qualified_goalkeeper_survives_without_a_fixed_quota(self):
         specs = [
             ("Gabriel Brazão", "FORTE", "BOM", "AMBOS", 10, 2),
             # Na rodada real, o perfil final é AMBOS mesmo quando os dois
@@ -108,10 +108,9 @@ class GoalkeeperProfileTests(unittest.TestCase):
             rows.append(candidate)
 
         text = generate_goalkeeper_caption_plain(rows, 26, 3)
-        for selected in ("Gabriel Brazão", "Carlos Miguel", "Everson", "Mycael", "Rossi"):
+        for selected in ("Gabriel Brazão", "Carlos Miguel", "Everson", "Mycael", "Rossi",
+                         "Ronaldo", "Tiago Volpi"):
             self.assertIn(selected, text)
-        self.assertNotIn("Ronaldo", text)
-        self.assertNotIn("Tiago Volpi", text)
         self.assertIn("Seleção revisada", text)
 
 

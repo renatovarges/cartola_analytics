@@ -12,6 +12,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 import pandas as pd
 
 from . import config
+from .calibration import get_thresholds
 
 
 API_URL = "https://api.cartolafc.globo.com/atletas/mercado"
@@ -52,6 +53,11 @@ def fetch_market(timeout=8, force=False) -> dict:
         if CACHE_PATH.exists():
             return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
         return {}
+
+
+def market_cache_is_fresh(max_age_hours: int = 48) -> bool:
+    """Impede usar uma escalação de outra rodada após falha da API."""
+    return CACHE_PATH.exists() and time.time() - CACHE_PATH.stat().st_mtime <= max_age_hours * 3600
 
 
 def _local_roles(df_players: pd.DataFrame) -> dict[tuple[str, str], str]:
@@ -103,11 +109,31 @@ def build_lineups(df_players: pd.DataFrame, payload=None) -> dict:
     return result
 
 
+def build_recent_candidates(df_players: pd.DataFrame, last_n: int = 4) -> dict:
+    """Elenco exploratório quando a API atual não pode confirmar escalações."""
+    if df_players is None or df_players.empty:
+        return {}
+    roles = _local_roles(df_players)
+    result = {}
+    for team, games in df_players.groupby("TIME"):
+        latest_matches = (games.sort_values("DATA")
+                          .drop_duplicates("MATCH_ID").tail(last_n).MATCH_ID)
+        recent = games[games.MATCH_ID.isin(latest_matches)]
+        club = _canonical_team(team)
+        for name in recent.NOME.unique():
+            role = roles.get((club, _key(name)))
+            if role:
+                result.setdefault(club, {}).setdefault(role, []).append(
+                    {"nome": f"{name} (a confirmar)", "status": 0})
+    return result
+
+
 def player_names(lineups: dict, team: str, role: str) -> list[str]:
     entries = lineups.get(_canonical_team(team), {}).get(role, [])
     probable = [e["nome"] for e in entries if e["status"] == 7]
     doubts = [e["nome"] for e in entries if e["status"] == 2]
-    return probable + doubts
+    unconfirmed = [e["nome"] for e in entries if e["status"] == 0]
+    return probable + doubts + unconfirmed
 
 
 def safe_names(value) -> list[str]:
@@ -134,19 +160,20 @@ def inject_lineups(rows: list[dict], lineups: dict) -> list[dict]:
 
 
 def _lineup_lookup(lineups: dict, team: str, roles: tuple[str, ...]) -> dict[str, str]:
-    """Nome normalizado -> rótulo público, restrito a provável ou dúvida."""
+    """Nome normalizado -> rótulo público, com status de confirmação explícito."""
     found = {}
     club = lineups.get(_canonical_team(team), {})
     for role in roles:
         for entry in club.get(role, []):
             label = entry["nome"]
-            clean = label.replace(" (Dúvida)", "")
+            clean = label.replace(" (Dúvida)", "").replace(" (a confirmar)", "")
             found[_key(clean)] = label
     return found
 
 
 def inject_scout_leaders(rows: list[dict], lineups: dict, engine, position: str,
-                         window_n: int = 3, date_cutoff=None) -> list[dict]:
+                         window_n: int = 3, date_cutoff=None,
+                         mando_mode: str = "POR_MANDO") -> list[dict]:
     """Vincula cada scout somente a atletas prováveis/dúvidas que o produziram.
 
     A tabela continua coletiva. Esses campos existem apenas para impedir que a
@@ -167,34 +194,45 @@ def inject_scout_leaders(rows: list[dict], lineups: dict, engine, position: str,
             if not team or not eligible:
                 continue
             concentration = engine.get_player_concentration(
-                team, pos, window_n=window_n, mando_filter=mando,
-                date_cutoff=date_cutoff,
+                team, pos, window_n=window_n,
+                mando_filter=mando if mando_mode == "POR_MANDO" else None,
+                date_cutoff=date_cutoff, max_rank=None,
             )
             if concentration is None or concentration.empty:
                 continue
             for scout, group in concentration.groupby("SCOUT", sort=False):
-                matches = []
+                names = []
+                basica_cut = get_thresholds(pos, "BASICA", window_n)
                 for item in group.sort_values(["RANK", "NOME"]).itertuples():
                     label = eligible.get(_key(item.NOME))
-                    if label:
-                        matches.append((label, float(item.TOTAL)))
-                if not matches:
+                    if not label:
+                        continue
+                    total = float(item.TOTAL)
+                    if scout == "BASICA":
+                        relevant = (basica_cut is not None and total >= basica_cut.light
+                                    and item.JOGOS >= 2)
+                    elif scout in {"G", "A", "PG"}:
+                        relevant = total >= 1
+                    else:
+                        share = float(item.PARTICIPACAO)
+                        minimum_share = 0.15 if pos == "LATERAIS" else 0.20
+                        relevant = total >= 2 and (
+                            share >= minimum_share or item.JOGOS_COM_SCOUT >= 2)
+                    if relevant:
+                        names.append(label)
+                if not names:
                     continue
-                best = matches[0][1]
-                # Empates reais são mantidos; não transformamos toda a posição em opção.
-                names = [label for label, value in matches if value == best]
                 row[f"DESTAQUES_{side}_{scout}"] = names
                 if pos == "LATERAIS":
+                    selected = {_key(label.replace(" (Dúvida)", "").replace(" (a confirmar)", "")) for label in names}
                     for lateral_role in ("LE", "LD"):
                         lateral_eligible = _lineup_lookup(lineups, team, (lateral_role,))
-                        lateral_matches = [
-                            (lateral_eligible[_key(item.NOME)], float(item.TOTAL))
+                        lateral_names = [
+                            lateral_eligible[_key(item.NOME)]
                             for item in group.sort_values(["RANK", "NOME"]).itertuples()
                             if _key(item.NOME) in lateral_eligible
+                            and _key(item.NOME) in selected
                         ]
-                        if lateral_matches:
-                            lateral_best = lateral_matches[0][1]
-                            row[f"DESTAQUES_{side}_{lateral_role}_{scout}"] = [
-                                label for label, value in lateral_matches if value == lateral_best
-                            ]
+                        if lateral_names:
+                            row[f"DESTAQUES_{side}_{lateral_role}_{scout}"] = lateral_names
     return rows

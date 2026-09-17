@@ -31,5 +31,11 @@ TABELA_*_FINAL_HD.png
 input/temp_upload.xlsx
 input/Scouts_Reorganizado_BACKUP.xlsx
 
+# Dados e entregas locais: o repositório de publicação é público
+input/*.xlsx
+input/PLANILHAS POR RODADA/
+input/cartola_provaveis_cache.json
+entrega_r28/
+
 # Dados locais não necessários na nuvem
 debug_laterais_output.csv

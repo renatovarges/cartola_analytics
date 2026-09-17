@@ -4,9 +4,34 @@ from src.caption_atacantes import generate_atacantes_caption_plain
 from src.caption_meias import generate_meias_caption_plain
 from src.caption_volantes import generate_volantes_caption_plain
 from src.caption_laterais import generate_laterais_caption_plain
+from src.caption_zagueiros import generate_zagueiros_caption_plain
 
 
 class CaptionSynthesisTests(unittest.TestCase):
+    def test_qualified_sixth_team_is_not_discarded(self):
+        rows = []
+        for number in range(6):
+            rows.append({
+                "MANDANTE": f"TIME {number}", "VISITANTE": f"RIVAL {number}",
+                "COC_PG": 7, "CDF_PG": 5,
+                "COC_CHUTES": 24, "CDF_CHUTES": 20,
+                "COC_AF": 13, "CDF_AF": 10,
+                "COC_DE": 18, "CDF_DE": 15,
+                "COC_LE_DE": 11, "CDF_LE_DE": 9,
+                "COC_LD_DE": 0, "CDF_LD_DE": 0,
+            })
+        generators = (
+            generate_atacantes_caption_plain,
+            generate_meias_caption_plain,
+            generate_volantes_caption_plain,
+            generate_laterais_caption_plain,
+            generate_zagueiros_caption_plain,
+        )
+        for generate in generators:
+            with self.subTest(generate=generate.__name__):
+                text = generate(rows, 28, 3)
+                self.assertIn("Time 5", text)
+
     def test_attackers_merge_scouts_and_explain_each_name(self):
         row = {"MANDANTE": "FLAMENGO", "VISITANTE": "VASCO",
                "COC_G": 5, "COC_A": 2, "COC_PG": 7, "CDF_PG": 1,

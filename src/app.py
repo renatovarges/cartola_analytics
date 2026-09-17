@@ -9,7 +9,7 @@ import hashlib
 
 # Configuração OBRIGATÓRIA no início
 st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
-APP_VERSION = "2026.09.04-9"
+APP_VERSION = "2026.09.17-4"
 st.caption(f"Versão {APP_VERSION}")
 
 # Resultados guardados pelo Streamlit não podem sobreviver a uma mudança nas
@@ -55,8 +55,11 @@ from src.caption_volantes import (
     generate_volantes_caption_html,
 )
 from src.clipboard_utils import copy_text_to_clipboard
+from src.caption_delivery import split_caption
 from src.calibration import classify
-from src.cartola_lineups import build_lineups, inject_lineups, inject_scout_leaders
+from src.cartola_lineups import (build_lineups, build_recent_candidates, inject_lineups,
+                                 inject_scout_leaders, market_cache_is_fresh)
+from src.player_indications import inject_player_indications
 
 # ---------------------------------------------------------------------------
 # Helper — exibe resultado do botão de copiar (Windows ou web)
@@ -77,9 +80,24 @@ def _show_copy_status(status: str, tg_text: str) -> None:
         st.warning(f"⚠️ Não foi possível copiar: {status}")
 
 
+def _copy_caption_buttons(tg_text: str, key: str) -> None:
+    parts = split_caption(tg_text)
+    if len(parts) > 1:
+        st.caption(f"Legenda completa em {len(parts)} mensagens. Copie e envie cada parte na ordem.")
+    for index, part in enumerate(parts):
+        label = ("📋 Copiar para Telegram" if len(parts) == 1
+                 else f"📋 Copiar parte {index + 1}/{len(parts)}")
+        if st.button(label, key=f"btn_copy_{key}_{index}", type="primary"):
+            ok, error = copy_text_to_clipboard(part)
+            st.session_state[f"_copy_{key}"] = ("ok" if ok else error, index)
+    status = st.session_state.get(f"_copy_{key}")
+    if status and status[1] < len(parts):
+        _show_copy_status(status[0], parts[status[1]])
+
+
 # === PROTEÇÃO POR PIN ===
 def check_pin():
-    """Verifica PIN de acesso usando st.secrets."""
+    """Verifica o PIN configurado no servidor ou no ambiente local."""
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     
@@ -93,9 +111,13 @@ def check_pin():
     
     if st.button("Entrar"):
         try:
-            correct_pin = st.secrets["pin"]
+            correct_pin = st.secrets.get("pin")
         except Exception:
-            correct_pin = "1979"  # Fallback para desenvolvimento local
+            correct_pin = None
+        correct_pin = correct_pin or os.environ.get("TCC_PIN")
+        if not correct_pin:
+            st.error("PIN não configurado. Defina 'pin' nos Secrets do Streamlit ou TCC_PIN no ambiente.")
+            return False
         
         if pin_input == str(correct_pin):
             st.session_state.authenticated = True
@@ -131,11 +153,14 @@ else:
 
 # 2. Seletor de Rodada Alvo
 rodadas_disponiveis = sorted(rounds_data.keys()) if rounds_data else [1]
-rodada_alvo = st.sidebar.selectbox("Rodada Alvo", rodadas_disponiveis, index=0)
+rodada_alvo = st.sidebar.selectbox(
+    "Rodada Alvo", rodadas_disponiveis,
+    index=rodadas_disponiveis.index(28) if 28 in rodadas_disponiveis else 0,
+)
 
 # 3. Recorte e Filtros
-window_n = st.sidebar.number_input("Recorte (N Jogos)", min_value=1, max_value=20, value=5)
-tipo_filtro = st.sidebar.radio("Tipo de Filtro", ["TODOS", "POR_MANDO"], index=0, help="TODOS: Últimos N jogos gerais. POR_MANDO: Últimos N jogos em casa (para mandante) ou fora (para visitante).")
+window_n = st.sidebar.number_input("Recorte (N Jogos)", min_value=1, max_value=20, value=3)
+tipo_filtro = st.sidebar.radio("Tipo de Filtro", ["TODOS", "POR_MANDO"], index=1, help="TODOS: Últimos N jogos gerais. POR_MANDO: Últimos N jogos em casa (para mandante) ou fora (para visitante).")
 
 # SELETOR DE POSIÇÃO (MACRO)
 st.sidebar.markdown("---")
@@ -148,7 +173,7 @@ if macro_pos == "Meias":
     mv_filter_map = {"Todos": None, "Apenas Meias": "MEIA", "Apenas Volantes": "VOLANTE"}
     mv_filter_val = mv_filter_map[mv_selection]
 
-data_corte = st.sidebar.date_input("Data de Corte", pd.to_datetime("2026-12-31")) # Atualizado padrao pra 2026
+data_corte = st.sidebar.date_input("Data de Corte", pd.to_datetime("2026-09-18"))
 
 # 4. Seleção de Arquivo Excel (Fonte de Dados)
 DEFAULT_PATH = os.path.join(BASE_DIR, "input", "Scouts_Reorganizado.xlsx")
@@ -322,6 +347,7 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
                     mv_filter="ATACANTE"
                 )
                 
+            row["MODO_ANALISE"] = tipo_filtro
             results.append(row)
         except Exception as e:
             st.warning(f"Erro em {mandante}x{visitante}: {e}")
@@ -333,6 +359,9 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
     if results:
         try:
             _lineups = build_lineups(engine.df_pj)
+            if not market_cache_is_fresh() or not _lineups:
+                _lineups = build_recent_candidates(engine.df_pj)
+                st.warning("Escalações atuais do Cartola indisponíveis. Nomes individuais vêm dos quatro jogos mais recentes e aparecem como 'a confirmar'.")
             results = inject_lineups(results, _lineups)
             _caption_position = {
                 "Meias": "VOLANTES" if mv_filter_val == "VOLANTE" else "MEIAS",
@@ -343,10 +372,14 @@ if st.button(f"Gerar Tabela de {macro_pos}", type="primary"):
                 results = inject_scout_leaders(
                     results, _lineups, engine, _caption_position,
                     window_n=window_n, date_cutoff=data_corte,
+                    mando_mode=tipo_filtro,
                 )
-        except Exception:
-            # A API enriquece as frases, mas nunca pode impedir a tabela.
-            pass
+                results = inject_player_indications(
+                    results, _lineups, engine, _caption_position,
+                    date_cutoff=data_corte,
+                )
+        except Exception as _lineup_err:
+            st.warning(f"Não foi possível verificar os atletas da legenda: {_lineup_err}")
         # Salvar no session_state com chave dinamica para nao misturar
         st.session_state["results_key"] = macro_pos
         st.session_state["results_df"] = pd.DataFrame(results)
@@ -416,6 +449,38 @@ if "results_df" in st.session_state:
     
     # Exibir Tabela
     st.dataframe(df_results, use_container_width=True)
+
+    _audit_position = (
+        "VOLANTES" if current_pos == "Meias" and subtype == "VOLANTE"
+        else current_pos.upper()
+    )
+    _audit_column = f"AUDITORIA_{_audit_position}"
+    if _audit_column in st.session_state["results_df"].columns:
+        _audit_items = [item for values in st.session_state["results_df"][_audit_column]
+                        if isinstance(values, list) for item in values]
+        with st.expander("Critérios e trilha das indicações individuais", expanded=False):
+            st.caption(
+                "Produção: até 5 jogos recentes do atleta, com pelo menos 3 aparições e "
+                "jogo em uma das 4 partidas mais recentes do time. O corte próprio vai do "
+                "percentil 75 ao 90 conforme posição e scout; finalizações de atacantes "
+                "exigem ocorrência em 3 jogos, e os demais scouts em 2. "
+                "O cruzamento aparece como contexto quando a produção "
+                "também alcança o percentil 75 e o adversário cede o scout de modo recorrente. "
+                "A recorrência descreve o padrão, sem bônus automático. "
+                "Com API atual, entram prováveis e dúvidas do Cartola; sem ela, "
+                "o nome vem do histórico e aparece como 'a confirmar'."
+            )
+            if _audit_items:
+                _audit_frame = pd.DataFrame(_audit_items).drop(columns=["goleiro_adversario"], errors="ignore")
+                st.dataframe(_audit_frame, use_container_width=True, hide_index=True)
+                st.download_button(
+                    "Baixar trilha completa das indicações",
+                    _audit_frame.to_csv(index=False).encode("utf-8-sig"),
+                    f"auditoria_individual_{_audit_position.lower()}_r{rodada_alvo}.csv",
+                    "text/csv",
+                )
+            else:
+                st.info("Sem atletas elegíveis com histórico suficiente neste recorte.")
     
     # Botão Download CSV
     csv = df_results.to_csv(index=False).encode('utf-8-sig')
@@ -586,7 +651,9 @@ if "results_df" in st.session_state:
             if concentration_rows:
                 concentration_df = pd.concat(concentration_rows, ignore_index=True)
                 leaders = concentration_df[concentration_df["RANK"].eq(1)].copy()
-                leaders["PARTICIPACAO"] = (leaders["PARTICIPACAO"] * 100).round().astype(int).astype(str) + "%"
+                leaders["PARTICIPACAO"] = leaders["PARTICIPACAO"].map(
+                    lambda value: f"{value:.0%}" if pd.notna(value) else "n.a."
+                )
                 leaders = leaders.rename(columns={
                     "NOME": "JOGADOR", "TOTAL": "TOTAL NO RECORTE",
                     "PARTICIPACAO": "% DA POSIÇÃO", "JOGOS": "JOGOS",
@@ -699,17 +766,7 @@ if ("results_df" in st.session_state
 
         st.markdown(caption_mei_html, unsafe_allow_html=True)
 
-        col_mei_btn, col_mei_msg = st.columns([1, 3])
-        with col_mei_btn:
-            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda_mei", type="primary"):
-                _ok, _err = copy_text_to_clipboard(caption_mei_tg)
-                if _ok:
-                    st.session_state["_legenda_mei_copy_status"] = "ok"
-                else:
-                    st.session_state["_legenda_mei_copy_status"] = _err
-
-        with col_mei_msg:
-            _show_copy_status(st.session_state.get("_legenda_mei_copy_status", ""), caption_mei_tg)
+        _copy_caption_buttons(caption_mei_tg, "mei")
 
         with st.expander("📄 Texto puro (alternativa manual)"):
             st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
@@ -734,10 +791,7 @@ if ("results_df" in st.session_state
         vol_html = generate_volantes_caption_html(rows_vol, rodada_alvo, window_n)
         vol_tg = generate_volantes_caption_telegram_md(rows_vol, rodada_alvo, window_n)
         st.markdown(vol_html, unsafe_allow_html=True)
-        if st.button("Copiar Volantes para Telegram", key="btn_copy_legenda_vol", type="primary"):
-            _ok, _err = copy_text_to_clipboard(vol_tg)
-            st.session_state["_legenda_vol_copy_status"] = "ok" if _ok else _err
-        _show_copy_status(st.session_state.get("_legenda_vol_copy_status", ""), vol_tg)
+        _copy_caption_buttons(vol_tg, "vol")
         with st.expander("Texto puro: Volantes"):
             st.text_area("", vol_plain, height=300, key="caption_vol_plain_area")
     except Exception as _vol_err:
@@ -765,17 +819,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
 
         st.markdown(caption_atk_html, unsafe_allow_html=True)
 
-        col_atk_btn, col_atk_msg = st.columns([1, 3])
-        with col_atk_btn:
-            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda_atk", type="primary"):
-                _ok, _err = copy_text_to_clipboard(caption_atk_tg)
-                if _ok:
-                    st.session_state["_legenda_atk_copy_status"] = "ok"
-                else:
-                    st.session_state["_legenda_atk_copy_status"] = _err
-
-        with col_atk_msg:
-            _show_copy_status(st.session_state.get("_legenda_atk_copy_status", ""), caption_atk_tg)
+        _copy_caption_buttons(caption_atk_tg, "atk")
 
         with st.expander("📄 Texto puro (alternativa manual)"):
             st.caption("Sem formatação. Use se o botão não funcionar (Ctrl+A → Ctrl+C).")
@@ -835,17 +879,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
         # --- Botão de copiar ---
         # Copia texto com marcadores **Telegram Markdown** via clip.exe (Windows nativo).
         # Ao colar no Telegram Desktop e ENVIAR, os ** somem e o negrito aparece.
-        col_btn, col_msg = st.columns([1, 3])
-        with col_btn:
-            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda", type="primary"):
-                _ok, _err = copy_text_to_clipboard(caption_tg_md)
-                if _ok:
-                    st.session_state["_legenda_copy_status"] = "ok"
-                else:
-                    st.session_state["_legenda_copy_status"] = _err
-
-        with col_msg:
-            _show_copy_status(st.session_state.get("_legenda_copy_status", ""), caption_tg_md)
+        _copy_caption_buttons(caption_tg_md, "gol")
 
         # --- Fallback: texto puro sempre visível ---
         with st.expander("📄 Texto puro (alternativa manual)"):
@@ -902,17 +936,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
         st.markdown("&nbsp;", unsafe_allow_html=True)
 
         # --- Botão de copiar ---
-        col_lat_btn, col_lat_msg = st.columns([1, 3])
-        with col_lat_btn:
-            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda_lat", type="primary"):
-                _ok, _err = copy_text_to_clipboard(caption_lat_tg)
-                if _ok:
-                    st.session_state["_legenda_lat_copy_status"] = "ok"
-                else:
-                    st.session_state["_legenda_lat_copy_status"] = _err
-
-        with col_lat_msg:
-            _show_copy_status(st.session_state.get("_legenda_lat_copy_status", ""), caption_lat_tg)
+        _copy_caption_buttons(caption_lat_tg, "lat")
 
         # --- Fallback: texto puro sempre visível ---
         with st.expander("📄 Texto puro (alternativa manual)"):
@@ -962,17 +986,7 @@ if "results_df" in st.session_state and st.session_state.get("results_key") == "
         st.markdown(caption_zag_html, unsafe_allow_html=True)
 
         # --- Botão de copiar ---
-        col_zag_btn, col_zag_msg = st.columns([1, 3])
-        with col_zag_btn:
-            if st.button("📋 Copiar para Telegram", key="btn_copy_legenda_zag", type="primary"):
-                _ok, _err = copy_text_to_clipboard(caption_zag_tg)
-                if _ok:
-                    st.session_state["_legenda_zag_copy_status"] = "ok"
-                else:
-                    st.session_state["_legenda_zag_copy_status"] = _err
-
-        with col_zag_msg:
-            _show_copy_status(st.session_state.get("_legenda_zag_copy_status", ""), caption_zag_tg)
+        _copy_caption_buttons(caption_zag_tg, "zag")
 
         # --- Fallback: texto puro sempre visível ---
         with st.expander("📄 Texto puro (alternativa manual)"):

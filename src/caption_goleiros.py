@@ -416,8 +416,6 @@ def _generate(
 
     entries = _collect_entries(goleiros_rows)
     entries.sort(key=lambda e: (e["priority"], e["volume"], -e["order"]), reverse=True)
-    if max_entries is None:
-        max_entries = 5
     if max_entries is not None:
         entries = entries[:max_entries]
 

@@ -298,7 +298,8 @@ def _collect_candidates(rows: list, window_n: int = 3) -> dict:
 
             entry = {
                 "time":      time,
-                "mando_txt": "em casa" if equipe_key == "MANDANTE" else "fora",
+                "mando_txt": ("gerais" if row.get("MODO_ANALISE") == "TODOS"
+                              else "em casa" if equipe_key == "MANDANTE" else "fora"),
                 "sg_t":  sg_t,  "sg_c":  sg_c,
                 "des_t": des_t, "des_c": des_c,
                 "fin_t": fin_t, "fin_c": fin_c,
@@ -335,11 +336,13 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
     lines = [
         b("ANÁLISE ESTATÍSTICA: ZAGUEIROS"),
         "",
-        f"Destaques positivos nos últimos {window_n} jogos por mando.",
+        f"Destaques positivos nos últimos {window_n} jogos {'gerais' if rows and rows[0].get('MODO_ANALISE') == 'TODOS' else 'por mando'}.",
     ]
 
     if not des_list and not fin_list and not bas_list:
         lines += ["", "Nenhum grupo de zagueiros passou nos filtros de destaque positivo nesta rodada."]
+        from .player_indications import append_individual_section
+        append_individual_section(lines, rows, "ZAGUEIROS", wrap)
         return "\n".join(lines)
 
     grouped = {}
@@ -348,7 +351,7 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
             grouped.setdefault(e["time"], {"entry": e, "scouts": set()})["scouts"].add(scout)
     ranked = sorted(grouped.values(), key=lambda x: (
         "des" in x["scouts"], len(x["scouts"]), x["entry"]["des_t"],
-        x["entry"]["bas_t"], x["entry"]["fin_t"]), reverse=True)[:5]
+        x["entry"]["bas_t"], x["entry"]["fin_t"]), reverse=True)
     lines += ["", b("🧱 DESTAQUES ENTRE OS ZAGUEIROS"), ""]
     for item in ranked:
         e, scouts = item["entry"], item["scouts"]
@@ -364,6 +367,8 @@ def _generate(rows: list, rodada: int, window_n: int, wrap=None) -> str:
         suffix = f" Destaques individuais: {'; '.join(links)}." if links else ""
         lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando_txt']}.{suffix}")
 
+    from .player_indications import append_individual_section
+    append_individual_section(lines, rows, "ZAGUEIROS", wrap)
     return "\n".join(lines)
 
 

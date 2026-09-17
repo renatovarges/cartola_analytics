@@ -324,7 +324,8 @@ class CartolaEngine:
         return slice_stats
 
     def get_player_concentration(self, team, position, window_n=3,
-                                 mando_filter=None, date_cutoff=None):
+                                 mando_filter=None, date_cutoff=None,
+                                 max_rank=3):
         """Concentração dos scouts no jogador dentro da janela da tabela."""
         pos = str(position).upper()
         if pos in {"MEIAS", "VOLANTES", "ATACANTES"}:
@@ -365,11 +366,17 @@ class CartolaEngine:
             if metric not in df.columns:
                 continue
             values = pd.to_numeric(df[metric], errors="coerce").fillna(0)
-            work = df.assign(_VALUE=values)
+            game_floor = {"DE": 2, "CHUTES": 1, "AF": 2,
+                          "G": 1, "A": 1, "PG": 1}.get(metric)
+            work = df.assign(
+                _VALUE=values,
+                _HIT=(values >= game_floor).astype(int) if game_floor else 0,
+            )
             aggregation = "mean" if metric == "BASICA" else "sum"
             players = work.groupby("NOME", as_index=False).agg(
                 TOTAL=("_VALUE", aggregation),
                 JOGOS=("MATCH_ID", "nunique"),
+                JOGOS_COM_SCOUT=("_HIT", "sum"),
             )
             players = players[players["TOTAL"].gt(0)].sort_values(
                 ["TOTAL", "JOGOS", "NOME"], ascending=[False, False, True]
@@ -377,22 +384,27 @@ class CartolaEngine:
             total = players["TOTAL"].sum()
             if total <= 0:
                 continue
-            players["PARTICIPACAO"] = players["TOTAL"] / total
-            players["CONCENTRACAO"] = pd.cut(
-                players["PARTICIPACAO"],
-                bins=[-np.inf, 0.35, 0.50, np.inf],
-                labels=["DISTRIBUIDA", "RELEVANTE", "ALTA"],
-                right=False,
-            ).astype(str)
+            if metric == "BASICA":
+                # Médias individuais não são partes aditivas de um total.
+                players["PARTICIPACAO"] = np.nan
+                players["CONCENTRACAO"] = "NAO_APLICAVEL"
+            else:
+                players["PARTICIPACAO"] = players["TOTAL"] / total
+                players["CONCENTRACAO"] = pd.cut(
+                    players["PARTICIPACAO"],
+                    bins=[-np.inf, 0.35, 0.50, np.inf],
+                    labels=["DISTRIBUIDA", "RELEVANTE", "ALTA"],
+                    right=False,
+                ).astype(str)
             players["TIME"] = team
             players["POSICAO"] = pos
             players["SCOUT"] = metric
             players["RANK"] = range(1, len(players) + 1)
-            records.append(players.head(3))
+            records.append(players.head(max_rank) if max_rank is not None else players)
         if not records:
             return pd.DataFrame()
         return pd.concat(records, ignore_index=True)[
-            ["TIME", "POSICAO", "SCOUT", "RANK", "NOME", "TOTAL", "PARTICIPACAO", "CONCENTRACAO", "JOGOS"]
+            ["TIME", "POSICAO", "SCOUT", "RANK", "NOME", "TOTAL", "PARTICIPACAO", "CONCENTRACAO", "JOGOS", "JOGOS_COM_SCOUT"]
         ]
 
     def get_team_scout_context(self, team, position, metric, mando, date_cutoff=None):

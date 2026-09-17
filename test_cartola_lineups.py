@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.cartola_lineups import build_lineups, inject_lineups, inject_scout_leaders, safe_names
+from src.cartola_lineups import (build_lineups, build_recent_candidates, inject_lineups,
+                                 inject_scout_leaders, player_names, safe_names)
 from src.classificacao import load_meias_volantes_classification
 
 
@@ -67,23 +68,44 @@ class CartolaLineupsTests(unittest.TestCase):
         self.assertEqual(rows[0]["JOGADORES_MANDANTE_LD"], ["Varela"])
         self.assertNotIn("Goleiro fora", rows[0]["JOGADORES_MANDANTE_GOL"])
 
-    def test_scout_leader_must_be_probable_or_doubt(self):
+    def test_historical_fallback_marks_lineup_as_unconfirmed(self):
+        frame = pd.DataFrame([
+            {"TIME": "FLAMENGO", "NOME": "JOAO", "POSICAO": "3", "POS_REAL": 3,
+             "DATA": pd.Timestamp("2026-09-01"), "MATCH_ID": "m1"},
+        ])
+        lineup = build_recent_candidates(frame)
+        self.assertEqual(player_names(lineup, "FLAMENGO", "ZAG"),
+                         ["JOAO (a confirmar)"])
+
+    def test_all_meaningful_scout_contributors_must_be_probable_or_doubt(self):
         class Engine:
+            calls = []
             def get_player_concentration(self, *args, **kwargs):
+                self.calls.append(kwargs)
                 return pd.DataFrame([
-                    {"SCOUT": "CHUTES", "RANK": 1, "NOME": "FORA", "TOTAL": 9},
-                    {"SCOUT": "CHUTES", "RANK": 2, "NOME": "PEDRO", "TOTAL": 6},
-                    {"SCOUT": "CHUTES", "RANK": 3, "NOME": "PAULO", "TOTAL": 4},
+                    {"SCOUT": "CHUTES", "RANK": 1, "NOME": "FORA", "TOTAL": 9,
+                     "PARTICIPACAO": 0.35, "JOGOS_COM_SCOUT": 3},
+                    {"SCOUT": "CHUTES", "RANK": 2, "NOME": "PEDRO", "TOTAL": 6,
+                     "PARTICIPACAO": 0.25, "JOGOS_COM_SCOUT": 2},
+                    {"SCOUT": "CHUTES", "RANK": 3, "NOME": "PAULO", "TOTAL": 4,
+                     "PARTICIPACAO": 0.22, "JOGOS_COM_SCOUT": 2},
+                    {"SCOUT": "CHUTES", "RANK": 4, "NOME": "JOAO", "TOTAL": 3,
+                     "PARTICIPACAO": 0.18, "JOGOS_COM_SCOUT": 2},
                 ])
         lineups = {"FLAMENGO": {"ATA": [
-            {"nome": "Pedro", "status": 7}, {"nome": "Paulo (Dúvida)", "status": 2}
+            {"nome": "Pedro", "status": 7}, {"nome": "Paulo (Dúvida)", "status": 2},
+            {"nome": "Joao", "status": 7},
         ]}}
+        engine = Engine()
         rows = inject_scout_leaders(
             [{"MANDANTE": "FLAMENGO", "VISITANTE": "VASCO"}],
-            lineups, Engine(), "ATACANTES", 3,
+            lineups, engine, "ATACANTES", 3, mando_mode="TODOS",
         )
-        self.assertEqual(rows[0]["DESTAQUES_MANDANTE_CHUTES"], ["Pedro"])
+        self.assertEqual(rows[0]["DESTAQUES_MANDANTE_CHUTES"],
+                         ["Pedro", "Paulo (Dúvida)", "Joao"])
         self.assertNotIn("Fora", rows[0]["DESTAQUES_MANDANTE_CHUTES"])
+        self.assertIsNone(engine.calls[0]["mando_filter"])
+        self.assertIsNone(engine.calls[0]["max_rank"])
 
 
 if __name__ == "__main__":

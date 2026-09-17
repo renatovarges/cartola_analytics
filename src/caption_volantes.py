@@ -10,8 +10,8 @@ def _generate(rows, rodada, window_n=3, wrap=None):
     candidates = []
     for row in rows:
         for team_key, own, conceded, mando in (
-            ("MANDANTE", "COC", "CDF", "em casa"),
-            ("VISITANTE", "COF", "CDC", "fora"),
+            ("MANDANTE", "COC", "CDF", "gerais" if row.get("MODO_ANALISE") == "TODOS" else "em casa"),
+            ("VISITANTE", "COF", "CDC", "gerais" if row.get("MODO_ANALISE") == "TODOS" else "fora"),
         ):
             team = str(row.get(team_key, "")).strip()
             if not team:
@@ -35,10 +35,11 @@ def _generate(rows, rodada, window_n=3, wrap=None):
 
     candidates.sort(key=lambda e: ("de" in e["scouts"], "bas" in e["scouts"],
                                     len(e["scouts"]), e["de"], e["bas"]), reverse=True)
-    lines = [b("ANÁLISE ESTATÍSTICA: VOLANTES"), "", f"Destaques dos últimos {window_n} jogos por mando."]
+    lines = [b("ANÁLISE ESTATÍSTICA: VOLANTES"), "",
+             f"Destaques dos últimos {window_n} jogos {'gerais' if rows and rows[0].get('MODO_ANALISE') == 'TODOS' else 'por mando'}."]
     if candidates:
         lines += ["", b("🧱 DESTAQUES ENTRE OS VOLANTES"), ""]
-    for e in candidates[:5]:
+    for e in candidates:
         subject = b(f"Os volantes {_fmt_team(e['team'])}")
         facts = []
         if "de" in e["scouts"]: facts.append(f"{int(e['de'])} desarmes")
@@ -52,6 +53,8 @@ def _generate(rows, rodada, window_n=3, wrap=None):
         lines.append(f"{subject}: {'; '.join(facts)} nos últimos {window_n} jogos {e['mando']}.{suffix}")
     if not candidates:
         lines += ["", "Nenhum grupo de volantes passou nos filtros desta rodada."]
+    from .player_indications import append_individual_section
+    append_individual_section(lines, rows, "VOLANTES", wrap)
     return "\n".join(lines)
 
 
