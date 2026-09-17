@@ -35,12 +35,25 @@ SELECTION_RULES = {
 }
 DEFAULT_RULE = (.90, 2)
 METRIC_WORD = {"DE": "desarmes", "CHUTES": "finalizações", "PG": "participações em gol"}
+OCCURRENCE_WORD = {"DE": "2+ desarmes", "CHUTES": "finalização",
+                   "PG": "participação em gol"}
 ROLE_WORD = {"ATA": "atacantes", "MEI": "meias", "VOL": "volantes",
              "LE": "laterais esquerdos", "LD": "laterais direitos", "ZAG": "zagueiros"}
+VOLUME_METRICS = {"DE", "CHUTES"}
 
 
 def _number(value) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.1f}".replace(".", ",")
+
+
+def recurrence_gate(values, metric: str, minimum_hits: int) -> tuple[int, int, int, bool]:
+    """Exige frequência proporcional e scout recente; G+A mantém régua própria."""
+    flags = [float(value) >= HIT_FLOOR[metric] for value in values]
+    hits = sum(flags)
+    volume = metric in VOLUME_METRICS
+    required = max(minimum_hits, math.ceil(.60 * len(flags))) if volume else minimum_hits
+    recent_hits = sum(flags[-2:] if volume else flags[-3:])
+    return hits, required, recent_hits, hits >= required and recent_hits >= 1
 
 
 def _source(engine, cutoff) -> pd.DataFrame:
@@ -156,10 +169,11 @@ def analyse_matchups(engine, lineups: dict, rows: list[dict], position: str,
                 for metric in METRICS.get(role, ()):
                     values = games[metric]
                     total = float(values.sum())
-                    hits = int(values.ge(HIT_FLOOR[metric]).sum())
                     ref = thresholds["own"].get((role, metric))
                     percentile, minimum_hits = SELECTION_RULES.get(
                         (role, metric), DEFAULT_RULE)
+                    hits, required_hits, recent_hits, sustained = recurrence_gate(
+                        values, metric, minimum_hits)
                     own_rate = total / len(games)
                     strong = bool(ref and own_rate >= ref[percentile] and
                                   total >= MIN_TOTAL[metric] and hits >= minimum_hits)
@@ -172,23 +186,28 @@ def analyse_matchups(engine, lineups: dict, rows: list[dict], position: str,
                     opponent_pattern = (len(conceded) >= 4 and
                                         conceded_hits >= max(3, math.ceil(.75 * len(conceded))))
                     crossed = moderate and opponent_pattern
-                    selected = len(games) >= 3 and fresh and strong
+                    selected = len(games) >= 3 and fresh and strong and sustained
                     item = {
                         "time": team, "adversario": opponent, "lado": side,
                         "jogador": label, "posicao": role, "scout": metric,
                         "total": total, "jogos": len(games), "ocorrencias": hits,
-                        "recorrente": hits >= 3,
+                        "recorrente": sustained,
                         "percentil_75": ref[.75] if ref else None,
                         "percentil_80": ref[.80] if ref else None,
                         "percentil_85": ref[.85] if ref else None,
                         "percentil_90": ref[.90] if ref else None,
                         "percentil_exigido": percentile,
-                        "ocorrencias_exigidas": minimum_hits,
+                        "ocorrencias_exigidas": required_hits,
+                        "ocorrencias_recentes": recent_hits,
+                        "janela_recente": 2 if metric in VOLUME_METRICS else 3,
                         "cedidos": sum(conceded), "jogos_adversario": len(conceded),
                         "ocorrencias_cedidas": conceded_hits, "corte_cedido": cut,
-                        "forte": strong, "cruzamento": crossed, "selecionado": selected,
+                        "forte": strong, "recorrencia_sustentada": sustained,
+                        "cruzamento": crossed, "selecionado": selected,
                         "motivo": ("selecionado" if selected else "amostra_curta" if len(games) < 3
-                                   else "sem_jogo_recente" if not fresh else "abaixo_dos_cortes"),
+                                   else "sem_jogo_recente" if not fresh
+                                   else "recorrencia_fraca" if strong and not sustained
+                                   else "abaixo_dos_cortes"),
                     }
                     if selected and metric == "PG" and keeper:
                         item["goleiro_adversario"] = keeper
@@ -240,8 +259,8 @@ def append_individual_section(lines: list[str], rows: list[dict], position: str,
                 metric = item["scout"]
                 fact = (f"{_number(item['total'])} {METRIC_WORD[metric]} em "
                         f"{item['jogos']} jogos")
-                if item["recorrente"]:
-                    fact += f" ({item['ocorrencias']}/{item['jogos']} jogos com scout)"
+                fact += (f" ({item['ocorrencias']}/{item['jogos']} jogos com "
+                         f"{OCCURRENCE_WORD[metric]})")
                 if item["cruzamento"]:
                     fact += (f"; adversário cedeu {METRIC_WORD[metric]} a "
                              f"{ROLE_WORD[item['posicao']]} em "

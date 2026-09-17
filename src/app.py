@@ -9,7 +9,7 @@ import hashlib
 
 # Configuração OBRIGATÓRIA no início
 st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
-APP_VERSION = "2026.09.17-4"
+APP_VERSION = "2026.09.17-5"
 st.caption(f"Versão {APP_VERSION}")
 
 # Resultados guardados pelo Streamlit não podem sobreviver a uma mudança nas
@@ -462,8 +462,10 @@ if "results_df" in st.session_state:
             st.caption(
                 "Produção: até 5 jogos recentes do atleta, com pelo menos 3 aparições e "
                 "jogo em uma das 4 partidas mais recentes do time. O corte próprio vai do "
-                "percentil 75 ao 90 conforme posição e scout; finalizações de atacantes "
-                "exigem ocorrência em 3 jogos, e os demais scouts em 2. "
+                "percentil 75 ao 90 conforme posição e scout. Desarmes e "
+                "finalizações exigem scout em pelo menos 60% das aparições "
+                "(3/5 quando há cinco jogos), incluindo uma das duas mais recentes. "
+                "G + A exige duas ocorrências, com uma nas últimas três aparições. "
                 "O cruzamento aparece como contexto quando a produção "
                 "também alcança o percentil 75 e o adversário cede o scout de modo recorrente. "
                 "A recorrência descreve o padrão, sem bônus automático. "

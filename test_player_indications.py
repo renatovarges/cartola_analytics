@@ -5,7 +5,8 @@ import pandas as pd
 
 from src.caption_zagueiros import generate_zagueiros_caption_plain
 from src.engine import CartolaEngine
-from src.player_indications import analyse_matchups, append_individual_section, _keeper_evidence
+from src.player_indications import (analyse_matchups, append_individual_section,
+                                    recurrence_gate, _keeper_evidence)
 
 
 class PlayerIndicationsTests(unittest.TestCase):
@@ -17,7 +18,7 @@ class PlayerIndicationsTests(unittest.TestCase):
             "POSICAO": ["3"] * 5,
             "MATCH_ID": [f"j{i}" for i in range(5)],
             "DATA": pd.date_range("2026-08-01", periods=5),
-            "DE": [2, 2, 2, 1, 1], "CHUTES": [0] * 5,
+            "DE": [2, 2, 1, 1, 2], "CHUTES": [0] * 5,
             "PG": [0] * 5, "GS": [0] * 5,
         })
         self.lineup = {"ALFA": {"ZAG": [{"nome": "Joao", "status": 7}]}}
@@ -48,6 +49,26 @@ class PlayerIndicationsTests(unittest.TestCase):
         chosen, audit = self._analyse([4, 0, 0, 4, 0])
         self.assertEqual(len(chosen), 1)
         self.assertFalse(chosen[0]["cruzamento"])
+
+    def test_two_early_spikes_do_not_count_as_sustained_desarmes(self):
+        self.games["DE"] = [4, 5, 1, 1, 1]
+        chosen, audit = self._analyse([0, 0, 0, 0, 0])
+        self.assertFalse(chosen)
+        self.assertEqual(audit[0]["total"], 12)
+        self.assertEqual(audit[0]["ocorrencias"], 2)
+        self.assertEqual(audit[0]["motivo"], "recorrencia_fraca")
+
+    def test_three_old_hits_without_recent_hit_do_not_pass(self):
+        self.games["DE"] = [2, 2, 2, 1, 1]
+        chosen, audit = self._analyse([0, 0, 0, 0, 0])
+        self.assertFalse(chosen)
+        self.assertEqual(audit[0]["ocorrencias_exigidas"], 3)
+        self.assertEqual(audit[0]["ocorrencias_recentes"], 0)
+
+    def test_consistent_volume_and_event_scout_have_distinct_windows(self):
+        self.assertEqual(recurrence_gate([2, 3, 5, 2, 4], "DE", 2), (5, 3, 2, True))
+        self.assertEqual(recurrence_gate([1, 1, 0, 0, 0], "PG", 2), (2, 2, 0, False))
+        self.assertEqual(recurrence_gate([1, 0, 0, 0, 1], "PG", 2), (2, 2, 1, True))
 
     def test_cross_alone_does_not_promote_moderate_player(self):
         moderate_reference = {"own": {("ZAG", "DE"): {
