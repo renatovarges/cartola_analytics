@@ -32,7 +32,112 @@ class CartolaEngine:
             return f"{d_str}|{home}|{away}"
         
         df["MATCH_ID"] = df.apply(get_match_signature, axis=1)
+
+        # ------------------------------------------------------------------
+        # COLUNA RODADA NORMALIZADA.
+        #
+        # O defeito que isto conserta (05/out/2026): a "Regra de Ouro" procura
+        # self.df_pj["RODADA"] para descobrir sozinha a data de corte. A coluna
+        # da planilha se chama "Rodada PADV", entao a busca levantava KeyError,
+        # um `except: pass` engolia, e o sistema caia na data manual da barra
+        # lateral SEM DIZER NADA. A regra existia no papel e nunca rodou.
+        # ------------------------------------------------------------------
+        if "RODADA" not in df.columns:
+            for c in df.columns:
+                if str(c).strip().upper().startswith("RODADA"):
+                    df["RODADA"] = df[c]
+                    break
         self.df_pj = df
+        self.avisos_da_base = []
+        if "RODADA" not in self.df_pj.columns:
+            self.avisos_da_base.append(
+                "A base nao tem coluna de rodada. A data de corte automatica fica desligada."
+            )
+
+    def cobertura_da_base(self):
+        """
+        Ate onde a planilha carregada vai: ultima rodada com jogo e a data dela.
+
+        Existe para que o erro que motivou tudo isto fique VISIVEL. A tabela da
+        rodada 29 saiu errada porque a rodada 28 tinha sido descartada, e nada
+        na tela dizia ate onde a base ia. Agora diz.
+        """
+        df = self.df_pj
+        if "DATA" not in df.columns or df["DATA"].dropna().empty:
+            return None
+
+        # A ULTIMA RODADA E A MAIOR NUMERADA, nao a do ultimo jogo. Medido na
+        # base Pos R28: os jogos mais recentes sao de 03 e 04/10 e vem SEM
+        # numero de rodada, porque sao jogos atrasados. Perguntar "qual a
+        # rodada do ultimo jogo?" devolvia vazio. A pergunta certa e "ate que
+        # rodada a base esta completa?", e esses atrasados entram na conta
+        # cronologica de qualquer jeito, que e o que a Regra de Ouro manda.
+        rodadas = pd.to_numeric(df.get("RODADA"), errors="coerce") if "RODADA" in df.columns else None
+        rodada = int(rodadas.max()) if rodadas is not None and rodadas.notna().any() else None
+
+        ultima_data = df["DATA"].max()
+        sem_rodada = df[rodadas.isna()] if rodadas is not None else df.iloc[0:0]
+        return {
+            "rodada": rodada,
+            "data": ultima_data,
+            "jogos": df["MATCH_ID"].nunique(),
+            "jogos_sem_rodada": sorted(sem_rodada["MATCH_ID"].unique().tolist()),
+        }
+
+    def jogadores_sem_classificacao(self):
+        """
+        Jogadores de meio-campo que a classificacao manual nao cobre.
+
+        Eles nao entram NEM na tabela de meias NEM na de volantes: somem das
+        duas sem dizer nada. Com a correcao da janela o jogo deles continua
+        valendo, mas o que eles produziram segue de fora ate serem
+        classificados em input/classificacao_meias_volantes.csv.
+        """
+        from .classificacao import _normalize_name, _normalize_team
+        base = self.get_meias_stats_raw(None, mv_filter=None)
+        faltam = {}
+        for _, r in base.iterrows():
+            chave = (_normalize_team(r["TIME"]), _normalize_name(r["NOME"]))
+            if self.classificacao_mv.get(chave) is None:
+                faltam[(r["TIME"], r["NOME"])] = faltam.get((r["TIME"], r["NOME"]), 0) + 1
+        return sorted(faltam.items(), key=lambda x: -x[1])
+
+    def _data_de_corte(self, mandante, visitante, rodada_curr, corte_manual):
+        """
+        A data que separa "ja aconteceu" de "ainda vai acontecer".
+
+        REGRA DE OURO, agora valendo de verdade: quando a rodada e conhecida, e
+        ela que manda, nunca a data digitada na barra lateral.
+
+          - jogo da rodada esta na base  -> corta na data REAL dele
+          - jogo nao esta na base        -> rodada futura, NAO corta nada
+          - rodada desconhecida          -> usa a data manual
+
+        O SEGUNDO CASO E O QUE QUEBROU A TABELA DA RODADA 29. O jogo
+        Palmeiras x Bahia ainda nao aconteceu, entao nao existe na planilha, e o
+        codigo antigo mantinha a data manual. Essa data era 18/09 por padrao,
+        fixa no `app.py`, e descartava a rodada 28 inteira (19 a 21/09). O
+        resultado: o Bahia aparecia cedendo 3 a meias quando cede 0, e o
+        Palmeiras caia do 2o para fora da lista.
+
+        Rodada futura nao tem o que cortar: tudo que esta na base ja aconteceu
+        antes dela. Entao o certo e nao cortar nada.
+        """
+        if rodada_curr is None:
+            return corte_manual
+        if "RODADA" not in self.df_pj.columns:
+            return corte_manual
+        mask = (
+            (self.df_pj["TIME"] == mandante)
+            & (self.df_pj["ADVERSARIO"] == visitante)
+            & (self.df_pj["RODADA"].astype(str).str.replace(".0", "", regex=False) == str(int(rodada_curr)))
+        )
+        achados = self.df_pj[mask]
+        if not achados.empty:
+            data = achados.iloc[0]["DATA"]
+            if pd.notna(data):
+                return data
+        return None
 
     def process_af_update(self):
         """
@@ -124,24 +229,53 @@ class CartolaEngine:
         
         return df
 
-    def get_aggregated_stats(self, df_raw, window_n, time_filter=None, mando_filter=None):
+    def get_aggregated_stats(self, df_raw, window_n, time_filter=None, mando_filter=None, df_universo=None):
         """
         Calcula média dos últimos N jogos para um time num contexto específico.
         Ex: Flamengo, Mando='CASA' -> Retorna média de PG, CHUTES, BASICA.
+
+        df_universo: base de posição SEM o filtro meia/volante. É ela que define
+        QUAIS jogos entram na janela. Ver o comentário abaixo.
         """
-        df = df_raw.copy()
-        
-        # Filtro de Time
-        if time_filter:
-            df = df[df["TIME"] == time_filter]
-            
-        # Filtro de Mando
-        if mando_filter == "CASA":
-            df = df[df["MANDO"] == "CASA"]
-        elif mando_filter == "FORA":
-            df = df[df["MANDO"] == "FORA"]
-            
-        # Ordenar e Janela
+        def _recorta(d):
+            if time_filter:
+                d = d[d["TIME"] == time_filter]
+            if mando_filter == "CASA":
+                d = d[d["MANDO"] == "CASA"]
+            elif mando_filter == "FORA":
+                d = d[d["MANDO"] == "FORA"]
+            return d
+
+        df = _recorta(df_raw.copy())
+
+        # ------------------------------------------------------------------
+        # A JANELA SAI DO UNIVERSO, NAO DA BASE JA FILTRADA.
+        #
+        # O defeito que isto conserta (05/out/2026, achado a partir da linha
+        # Palmeiras x Bahia): o filtro MEIA/VOLANTE corta LINHAS DE JOGADOR, e
+        # a janela era montada depois do corte. Se num jogo o time nao teve
+        # NENHUM meia classificado em campo, aquele jogo deixava de existir e
+        # a janela escorregava para tras em silencio.
+        #
+        # Medido na base Pos R28: o Gremio em casa usava Sao Paulo (10/08),
+        # Chapecoense (01/09) e Vasco (15/09) como "ultimos 3", jogando fora o
+        # jogo de 21/09 contra o Palmeiras, em que so entraram volantes. Sete
+        # pares time/mando estavam assim.
+        #
+        # Jogo sem meia em campo vale ZERO, nao vale "nao aconteceu". Os
+        # laterais ja faziam certo: montam a janela com todos os laterais e so
+        # depois separam LE de LD. Aqui agora e igual.
+        # ------------------------------------------------------------------
+        universo = _recorta(df_universo.copy()) if df_universo is not None else df
+        jogos_da_janela = universo.groupby("MATCH_ID")["DATA"].first().sort_values()
+        if window_n > 0:
+            jogos_da_janela = jogos_da_janela.tail(window_n)
+        selecionados = list(jogos_da_janela.index)
+        if not selecionados:
+            return {k: 0 for k in ["G", "A", "PG", "CHUTES", "AF", "DE", "BASICA"]}
+        df = df[df["MATCH_ID"].isin(selecionados)]
+
+        # Ordenar
         df = df.sort_values("DATA", ascending=True)
         
         # Agrupa POR JOGO (pois pode ter múltiplos meias no mesmo jogo)
@@ -167,13 +301,13 @@ class CartolaEngine:
             "DATA": "first"
         }).sort_values("DATA")
         
-        # Aplicar Janela (últimos N jogos do TIME)
-        if hasattr(game_stats, "tail"):
-             # Se for 0 pega tudo
-            slice_stats = game_stats.tail(window_n) if window_n > 0 else game_stats
-        else:
-            slice_stats = game_stats
-            
+        # A janela JA foi aplicada la em cima, sobre o universo. Aqui so sobra
+        # o que aconteceu dentro dela. Jogo da janela sem nenhum jogador do
+        # recorte simplesmente nao aparece em game_stats, e isso esta certo:
+        # ele soma zero nos totais e nao entra na media da Basica, que e uma
+        # media de jogadores que existiram.
+        slice_stats = game_stats
+
         if len(slice_stats) == 0:
             return {k: 0 for k in ["G", "A", "PG", "CHUTES", "AF", "DE", "BASICA"]}
             
@@ -210,33 +344,21 @@ class CartolaEngine:
         mandante = normalize_team_name(mandante)
         visitante = normalize_team_name(visitante)
         
-        # --- AUTO-CUTOFF (Regra de Ouro) ---
-        # Se recebermos a rodada, tentamos achar a DATA REAL desse jogo na base.
-        # Isso substitui o date_cutoff manual e garante precisão cronológica absoluta.
-        if rodada_curr is not None:
-            # Buscar na base um jogo onde Time=Mandante, Adv=Visitante, Rodada=rodada_curr
-            # Normalizar rodada para garantir match (int/float/str)
-            try:
-                # Filtrar
-                mask = (
-                    (self.df_pj["TIME"] == mandante) & 
-                    (self.df_pj["ADVERSARIO"] == visitante) &
-                    (self.df_pj["RODADA"].astype(str).str.replace(".0", "") == str(int(rodada_curr)))
-                )
-                match_row = self.df_pj[mask]
-                
-                if not match_row.empty:
-                    # Achamos o jogo! Pegar a data.
-                    auto_date = match_row.iloc[0]["DATA"]
-                    if pd.notna(auto_date):
-                        date_cutoff = auto_date
-                        # print(f"DEBUG: Data Automática para {mandante}x{visitante} (R{rodada_curr}): {date_cutoff}")
-            except Exception as e:
-                # print(f"DEBUG: Falha ao buscar data automática: {e}")
-                pass
+        # --- Regra de Ouro: ver _data_de_corte ---
+        date_cutoff = self._data_de_corte(mandante, visitante, rodada_curr, date_cutoff)
         
         # Obter base bruta de meias (com o cutoff definido acima E filtro MV)
         df_raw = self.get_meias_stats_raw(date_cutoff, mv_filter=mv_filter)
+
+        # O UNIVERSO DE JOGOS, sem o corte meia/volante. E ele que diz QUAIS
+        # jogos entram na janela; o recorte diz apenas quanto cada um rendeu.
+        # Sem isto, jogo em que o time nao teve nenhum meia classificado em
+        # campo sumia da janela e ela escorregava para tras. Ver o comentario
+        # em get_aggregated_stats.
+        if mv_filter in ("MEIA", "VOLANTE"):
+            df_universo = self.get_meias_stats_raw(date_cutoff, mv_filter=None)
+        else:
+            df_universo = df_raw
         
         # Lógica de Filtros baseada no Modo
         if mando_mode == "POR_MANDO":
@@ -253,7 +375,7 @@ class CartolaEngine:
             
         # --- LADO ESQUERDO (Mandante) ---
         # 1. COC (Conquistados em Casa - Mandante)
-        coc = self.get_aggregated_stats(df_raw, window_n, time_filter=mandante, mando_filter=filter_coc)
+        coc = self.get_aggregated_stats(df_raw, window_n, time_filter=mandante, mando_filter=filter_coc, df_universo=df_universo)
         
         # 2. CDF (Cedidos Fora - Visitante)
         # O CDF olha para os ADVERSÁRIOS do Visitante.
@@ -261,22 +383,26 @@ class CartolaEngine:
         # Se TODOS: Visitante jogou Qualquer -> Adversario jogou Qualquer.
         
         df_opp_vis = df_raw[df_raw["ADVERSARIO"] == visitante]
+        uni_opp_vis = df_universo[df_universo["ADVERSARIO"] == visitante]
         if filter_cdf_opp:
              df_opp_vis = df_opp_vis[df_opp_vis["MANDO"] == filter_cdf_opp]
-             
-        cdf = self.get_aggregated_stats(df_opp_vis, window_n)
+             uni_opp_vis = uni_opp_vis[uni_opp_vis["MANDO"] == filter_cdf_opp]
+
+        cdf = self.get_aggregated_stats(df_opp_vis, window_n, df_universo=uni_opp_vis)
         
         # --- LADO DIREITO (Visitante) ---
         # 3. COF (Conquistados Fora - Visitante)
-        cof = self.get_aggregated_stats(df_raw, window_n, time_filter=visitante, mando_filter=filter_cof)
+        cof = self.get_aggregated_stats(df_raw, window_n, time_filter=visitante, mando_filter=filter_cof, df_universo=df_universo)
         
         # 4. CDC (Cedidos em Casa - Mandante)
         # O CDC olha para os ADVERSÁRIOS do Mandante.
         df_opp_mand = df_raw[df_raw["ADVERSARIO"] == mandante]
+        uni_opp_mand = df_universo[df_universo["ADVERSARIO"] == mandante]
         if filter_cdc_opp:
              df_opp_mand = df_opp_mand[df_opp_mand["MANDO"] == filter_cdc_opp]
-             
-        cdc = self.get_aggregated_stats(df_opp_mand, window_n)
+             uni_opp_mand = uni_opp_mand[uni_opp_mand["MANDO"] == filter_cdc_opp]
+
+        cdc = self.get_aggregated_stats(df_opp_mand, window_n, df_universo=uni_opp_mand)
         
         return {
             "MANDANTE": mandante,
@@ -551,18 +677,7 @@ class CartolaEngine:
         visitante = normalize_team_name(visitante)
         
         # Auto-cutoff (igual Meias)
-        if rodada_curr is not None:
-             # Tenta achar data desse jogo
-             try:
-                mask = (
-                    (self.df_pj["TIME"] == mandante) & 
-                    (self.df_pj["ADVERSARIO"] == visitante) &
-                    (self.df_pj["RODADA"].astype(str).str.replace(".0", "") == str(int(rodada_curr)))
-                )
-                match_row = self.df_pj[mask]
-                if not match_row.empty:
-                    date_cutoff = match_row.iloc[0]["DATA"]
-             except: pass
+        date_cutoff = self._data_de_corte(mandante, visitante, rodada_curr, date_cutoff)
 
         df_raw = self.get_zagueiros_stats_raw(date_cutoff)
         
@@ -937,17 +1052,9 @@ class CartolaEngine:
         df_all = self.df_pj.copy()
         
         # Auto-cutoff
-        if rodada_curr is not None:
-             try:
-                mask = (
-                    (self.df_pj["TIME"] == mandante) & 
-                    (self.df_pj["ADVERSARIO"] == visitante) &
-                    (self.df_pj["RODADA"].astype(str).str.replace(".0", "") == str(int(rodada_curr)))
-                )
-                match_row = self.df_pj[mask]
-                if not match_row.empty:
-                    df_all = df_all[df_all["DATA"] < match_row.iloc[0]["DATA"]]
-             except: pass
+        corte_laterais = self._data_de_corte(mandante, visitante, rodada_curr, None)
+        if corte_laterais is not None:
+            df_all = df_all[df_all["DATA"] < pd.to_datetime(corte_laterais)]
              
         # === LADO ESQUERDO (MANDANTE) ===
         # Filtro: Jogos do Mandante (em Casa)

@@ -173,7 +173,20 @@ if macro_pos == "Meias":
     mv_filter_map = {"Todos": None, "Apenas Meias": "MEIA", "Apenas Volantes": "VOLANTE"}
     mv_filter_val = mv_filter_map[mv_selection]
 
-data_corte = st.sidebar.date_input("Data de Corte", pd.to_datetime("2026-09-18"))
+# A DATA DE CORTE SAIU DA TELA (05/out/2026, decisao do Renato).
+#
+# Ela era um `date_input` com 2026-09-18 CRAVADO NO CODIGO como padrao, e o
+# motor jogava fora todo jogo daquela data em diante. Quem nao trocasse a data
+# na mao a cada rodada perdia a rodada inteira sem nenhum aviso: foi o que
+# aconteceu com o material da rodada 29, gerado com a planilha Pos R28 ja
+# correta, mas com a rodada 28 (19 a 21/09) descartada pela data. Resultado
+# medido: 23% das celulas da tabela de meias e volantes saiu errada, e o
+# Palmeiras aparecia com o Bahia cedendo 3 a meias quando cede 0.
+#
+# Quem decide o corte agora e a RODADA ALVO, em `engine._data_de_corte`:
+# rodada passada corta na data real do jogo, rodada futura nao corta nada.
+# Um campo que so pode ser preenchido de um jeito nao devia ser um campo.
+data_corte = None
 
 # 4. Seleção de Arquivo Excel (Fonte de Dados)
 DEFAULT_PATH = os.path.join(BASE_DIR, "input", "Scouts_Reorganizado.xlsx")
@@ -244,6 +257,33 @@ if file_path is None:
 
 try:
     engine = get_engine_v2(file_path, file_token or os.path.getmtime(file_path))
+
+    # ATE ONDE A BASE VAI, DITO NA TELA. E a rede de seguranca que faltava: o
+    # material da rodada 29 saiu errado porque a rodada 28 tinha sido jogada
+    # fora, e nada avisava. Agora a barra lateral diz a ultima rodada que a
+    # planilha carregada contem.
+    _cobertura = engine.cobertura_da_base()
+    if _cobertura:
+        _rod = _cobertura["rodada"]
+        _dia = _cobertura["data"].strftime("%d/%m") if hasattr(_cobertura["data"], "strftime") else _cobertura["data"]
+        _extra = ""
+        if _cobertura.get("jogos_sem_rodada"):
+            _extra = f" · {len(_cobertura['jogos_sem_rodada'])} jogo(s) atrasado(s) sem numero de rodada, contados pela data"
+        st.sidebar.info(
+            f"Base completa ate a rodada {_rod} · ultimo jogo em {_dia} · {_cobertura['jogos']} partidas{_extra}"
+        )
+        if _rod is not None and rodada_alvo is not None and int(_rod) < int(rodada_alvo) - 1:
+            st.sidebar.warning(
+                f"A base para na rodada {_rod} e voce esta montando a rodada {rodada_alvo}. "
+                "Faltam rodadas: atualize a planilha antes de gerar o material."
+            )
+    _sem_classificacao = engine.jogadores_sem_classificacao()
+    if _sem_classificacao:
+        st.sidebar.warning(
+            f"{len(_sem_classificacao)} jogador(es) de meio-campo sem classificacao meia/volante. "
+            "Eles ficam de fora das duas tabelas: "
+            + ", ".join(f"{n} ({t})" for (t, n), _ in _sem_classificacao[:5])
+        )
     
     # --- GERENCIAMENTO DE HISTÓRICO AF ---
     st.sidebar.markdown("---")
