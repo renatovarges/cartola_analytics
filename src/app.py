@@ -9,7 +9,7 @@ import hashlib
 
 # Configuração OBRIGATÓRIA no início
 st.set_page_config(page_title="Cartola Analytics 2026", layout="wide")
-APP_VERSION = "2026.09.17-5"
+APP_VERSION = "2026.10.05-1"
 st.caption(f"Versão {APP_VERSION}")
 
 # Resultados guardados pelo Streamlit não podem sobreviver a uma mudança nas
@@ -247,7 +247,15 @@ else:
 
 # Inicializar Engine
 @st.cache_resource(show_spinner=False)
-def get_engine_v2(path, token):
+def get_engine_v2(path, token, versao=APP_VERSION):
+    """
+    `versao` entra na CHAVE do cache, e e o conserto de um erro real
+    (05/out/2026): `st.cache_resource` guarda o OBJETO, nao o codigo. Depois de
+    publicar o conserto da data de corte, a tela ja era a nova e o motor em
+    memoria ainda era o antigo, entao a pagina abria com
+    "'CartolaEngine' object has no attribute 'cobertura_da_base'" e nao
+    mostrava nada. Com a versao na chave, toda publicacao reconstroi o motor.
+    """
     return CartolaEngine(path)
 
 # Validar se temos arquivo para processar
@@ -256,13 +264,18 @@ if file_path is None:
     st.stop()
 
 try:
-    engine = get_engine_v2(file_path, file_token or os.path.getmtime(file_path))
+    # a versao vai EXPLICITA, e nao por valor padrao: assim ela e com certeza
+    # parte da chave do cache, sem depender de como o Streamlit trata default.
+    engine = get_engine_v2(file_path, file_token or os.path.getmtime(file_path), APP_VERSION)
 
     # ATE ONDE A BASE VAI, DITO NA TELA. E a rede de seguranca que faltava: o
     # material da rodada 29 saiu errado porque a rodada 28 tinha sido jogada
     # fora, e nada avisava. Agora a barra lateral diz a ultima rodada que a
     # planilha carregada contem.
-    _cobertura = engine.cobertura_da_base()
+    # getattr e nao chamada direta: cinto de seguranca para o caso de o motor
+    # em cache ser mais velho que a tela. Falta de aviso e chato; pagina em
+    # branco com erro vermelho e pior.
+    _cobertura = engine.cobertura_da_base() if hasattr(engine, "cobertura_da_base") else None
     if _cobertura:
         _rod = _cobertura["rodada"]
         _dia = _cobertura["data"].strftime("%d/%m") if hasattr(_cobertura["data"], "strftime") else _cobertura["data"]
@@ -277,7 +290,7 @@ try:
                 f"A base para na rodada {_rod} e voce esta montando a rodada {rodada_alvo}. "
                 "Faltam rodadas: atualize a planilha antes de gerar o material."
             )
-    _sem_classificacao = engine.jogadores_sem_classificacao()
+    _sem_classificacao = engine.jogadores_sem_classificacao() if hasattr(engine, "jogadores_sem_classificacao") else []
     if _sem_classificacao:
         st.sidebar.warning(
             f"{len(_sem_classificacao)} jogador(es) de meio-campo sem classificacao meia/volante. "
