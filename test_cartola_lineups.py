@@ -26,6 +26,8 @@ class CartolaLineupsTests(unittest.TestCase):
             ("CHAPECOENSE", "YAGO FELIPE"): "VOLANTE",
             ("CORITIBA", "VITOR TISSI"): "VOLANTE",
             ("GREMIO", "JEFINHO"): "MEIA",
+            ("RED BULL BRAGANTINO", "BRUNINHO"): "MEIA",
+            ("RED BULL BRAGANTINO", "PATRICK"): "VOLANTE",
             ("REMO", "DAVID BRAGA"): "MEIA",
             ("SAO PAULO", "MARCOS ANTONIO"): "MEIA",
             ("VITORIA", "ZE VITOR"): "VOLANTE",
